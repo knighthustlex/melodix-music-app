@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import type { Song } from './services/api';
-import { getTopWorld, getTopByCountry, getCountries, searchSongs } from './services/api';
+import { getTopWorld, getTopByCountry, searchSongs } from './services/api';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Search, Play, Pause, SkipForward, SkipBack, Music, Home, TrendingUp, X, Loader2, Globe } from 'lucide-react';
 import './App.css';
@@ -8,54 +8,31 @@ import './App.css';
 const App: React.FC = () => {
   const [worldSongs, setWorldSongs] = useState<Song[]>([]);
   const [countrySongs, setCountrySongs] = useState<Song[]>([]);
-  const [countries, setCountries] = useState<string[]>([]);
-  const [selectedCountry, setSelectedCountry] = useState('usa');
   const [searchResults, setSearchResults] = useState<Song[]>([]);
   const [query, setQuery] = useState('');
   const [currentSong, setCurrentSong] = useState<Song | null>(null);
   const [isPlaying, setIsPlaying] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [isSearching, setIsSearching] = useState(false);
-  const [isCountryLoading, setIsCountryLoading] = useState(false);
   const audioRef = useRef<HTMLAudioElement | null>(null);
 
   useEffect(() => {
     loadInitialData();
   }, []);
 
-  useEffect(() => {
-    if (!isLoading) {
-      loadCountrySongs();
-    }
-  }, [selectedCountry]);
-
   const loadInitialData = async () => {
     try {
       setIsLoading(true);
-      const [world, initialCountry, countryList] = await Promise.all([
+      const [world, usaCharts] = await Promise.all([
         getTopWorld(12),
-        getTopByCountry('usa', 12),
-        getCountries()
+        getTopByCountry('usa', 12)
       ]);
       setWorldSongs(world || []);
-      setCountrySongs(initialCountry || []);
-      setCountries(countryList || []);
+      setCountrySongs(usaCharts || []);
     } catch (error) {
       console.error("Failed to load charts", error);
     } finally {
       setIsLoading(false);
-    }
-  };
-
-  const loadCountrySongs = async () => {
-    try {
-      setIsCountryLoading(true);
-      const data = await getTopByCountry(selectedCountry, 12);
-      setCountrySongs(data || []);
-    } catch (error) {
-      console.error("Failed to load country charts", error);
-    } finally {
-      setIsCountryLoading(false);
     }
   };
 
@@ -203,39 +180,22 @@ const App: React.FC = () => {
               <div className="section-header">
                 <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
                   <Globe size={20} color="var(--primary-color)" />
-                  <h2>Top in {selectedCountry.toUpperCase()}</h2>
-                </div>
-                <div className="dropdown-container">
-                  <select 
-                    value={selectedCountry} 
-                    onChange={(e) => setSelectedCountry(e.target.value)}
-                    className="country-select"
-                  >
-                    {countries.map(c => (
-                      <option key={c} value={c}>{c.charAt(0).toUpperCase() + c.slice(1)}</option>
-                    ))}
-                  </select>
+                  <h2>Top in USA</h2>
                 </div>
               </div>
 
-              {isCountryLoading ? (
-                <div style={{ padding: '40px 0', textAlign: 'center' }}>
-                  <Loader2 size={30} className="spin" style={{ margin: '0 auto' }} />
-                </div>
-              ) : (
-                <div className="songs-grid">
-                  {countrySongs.map(song => (
-                    <div key={song.id} className="song-list-item" onClick={() => playSong(song)}>
-                      <img src={song.image['150x150']} alt={song.title} className="song-list-image" />
-                      <div className="player-info">
-                        <div className="player-title">{song.title}</div>
-                        <div className="player-artist">{song.artist}</div>
-                      </div>
-                      <Play size={18} />
+              <div className="songs-grid">
+                {countrySongs.map(song => (
+                  <div key={song.id} className="song-list-item" onClick={() => playSong(song)}>
+                    <img src={song.image['150x150']} alt={song.title} className="song-list-image" />
+                    <div className="player-info">
+                      <div className="player-title">{song.title}</div>
+                      <div className="player-artist">{song.artist}</div>
                     </div>
-                  ))}
-                </div>
-              )}
+                    <Play size={18} />
+                  </div>
+                ))}
+              </div>
             </motion.section>
           </motion.div>
         )}
