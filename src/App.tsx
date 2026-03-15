@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import type { Song } from './services/api';
 import { getTopWorld, getTopIndia, searchSongs } from './services/api';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Search, Play, Pause, SkipForward, SkipBack, Music, Home, TrendingUp, X } from 'lucide-react';
+import { Search, Play, Pause, SkipForward, SkipBack, Music, Home, TrendingUp, X, Loader2 } from 'lucide-react';
 import './App.css';
 
 const App: React.FC = () => {
@@ -12,6 +12,8 @@ const App: React.FC = () => {
   const [query, setQuery] = useState('');
   const [currentSong, setCurrentSong] = useState<Song | null>(null);
   const [isPlaying, setIsPlaying] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
+  const [isSearching, setIsSearching] = useState(false);
   const audioRef = useRef<HTMLAudioElement | null>(null);
 
   useEffect(() => {
@@ -20,14 +22,17 @@ const App: React.FC = () => {
 
   const loadInitialData = async () => {
     try {
+      setIsLoading(true);
       const [world, india] = await Promise.all([
         getTopWorld(12),
         getTopIndia(12)
       ]);
-      setWorldSongs(world);
-      setIndiaSongs(india);
+      setWorldSongs(world || []);
+      setIndiaSongs(india || []);
     } catch (error) {
       console.error("Failed to load charts", error);
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -35,11 +40,14 @@ const App: React.FC = () => {
     e.preventDefault();
     if (!query.trim()) return;
     
+    setIsSearching(true);
     try {
       const results = await searchSongs(query, 15);
-      setSearchResults(results);
+      setSearchResults(results || []);
     } catch (error) {
       console.error("Search failed", error);
+    } finally {
+      setIsSearching(false);
     }
   };
 
@@ -119,7 +127,9 @@ const App: React.FC = () => {
             value={query}
             onChange={(e) => setQuery(e.target.value)}
           />
-          {query && (
+          {isSearching ? (
+             <Loader2 size={18} className="search-icon spin" style={{ left: 'auto', right: '18px' }} />
+          ) : query && (
             <X 
               size={18} 
               className="search-icon" 
@@ -131,7 +141,18 @@ const App: React.FC = () => {
       </header>
 
       <AnimatePresence mode="wait">
-        {searchResults.length > 0 ? (
+        {isLoading ? (
+          <motion.div 
+            key="loading"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="empty-state"
+          >
+            <Loader2 size={40} className="spin" style={{ margin: '0 auto 20px', display: 'block' }} />
+            <p>Tuning into the world's best music...</p>
+          </motion.div>
+        ) : searchResults.length > 0 ? (
           <motion.section 
             key="search-results"
             initial={{ opacity: 0, y: 20 }}
@@ -141,7 +162,7 @@ const App: React.FC = () => {
           >
             <div className="section-header">
               <h2>Search Results</h2>
-              <button onClick={clearSearch} style={{ background: 'transparent', border: 'none', color: 'var(--primary-color)', fontWeight: 600 }}>Clear</button>
+              <button onClick={clearSearch} style={{ background: 'transparent', border: 'none', color: 'var(--primary-color)', fontWeight: 600, cursor: 'pointer' }}>Clear</button>
             </div>
             <div className="songs-grid">
               {searchResults.map(song => (
@@ -169,47 +190,58 @@ const App: React.FC = () => {
               <motion.p variants={itemVariants}>Thousands of tracks, one destination.</motion.p>
             </section>
 
-            <motion.section variants={itemVariants}>
-              <div className="section-header">
-                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                  <TrendingUp size={20} color="var(--accent-color)" />
-                  <h2>Trending Globally</h2>
+            {worldSongs.length > 0 && (
+              <motion.section variants={itemVariants}>
+                <div className="section-header">
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <TrendingUp size={20} color="var(--accent-color)" />
+                    <h2>Trending Globally</h2>
+                  </div>
                 </div>
-              </div>
-              <div className="horizontal-scroll">
-                {worldSongs.map(song => (
-                  <motion.div 
-                    whileHover={{ scale: 1.05 }}
-                    whileTap={{ scale: 0.95 }}
-                    key={song.id} 
-                    className="trending-card" 
-                    onClick={() => playSong(song)}
-                  >
-                    <img src={song.image['500x500']} alt={song.title} className="trending-image" />
-                    <div className="player-title">{song.title}</div>
-                    <div className="player-artist">{song.artist}</div>
-                  </motion.div>
-                ))}
-              </div>
-            </motion.section>
-
-            <motion.section variants={itemVariants} className="glass-card">
-              <div className="section-header">
-                <h2>Top in India</h2>
-              </div>
-              <div className="songs-grid">
-                {indiaSongs.map(song => (
-                  <div key={song.id} className="song-list-item" onClick={() => playSong(song)}>
-                    <img src={song.image['150x150']} alt={song.title} className="song-list-image" />
-                    <div className="player-info">
+                <div className="horizontal-scroll">
+                  {worldSongs.map(song => (
+                    <motion.div 
+                      whileHover={{ scale: 1.05 }}
+                      whileTap={{ scale: 0.95 }}
+                      key={song.id} 
+                      className="trending-card" 
+                      onClick={() => playSong(song)}
+                    >
+                      <img src={song.image['500x500']} alt={song.title} className="trending-image" />
                       <div className="player-title">{song.title}</div>
                       <div className="player-artist">{song.artist}</div>
+                    </motion.div>
+                  ))}
+                </div>
+              </motion.section>
+            )}
+
+            {indiaSongs.length > 0 && (
+              <motion.section variants={itemVariants} className="glass-card">
+                <div className="section-header">
+                  <h2>Top in India</h2>
+                </div>
+                <div className="songs-grid">
+                  {indiaSongs.map(song => (
+                    <div key={song.id} className="song-list-item" onClick={() => playSong(song)}>
+                      <img src={song.image['150x150']} alt={song.title} className="song-list-image" />
+                      <div className="player-info">
+                        <div className="player-title">{song.title}</div>
+                        <div className="player-artist">{song.artist}</div>
+                      </div>
+                      <Play size={18} />
                     </div>
-                    <Play size={18} />
-                  </div>
-                ))}
+                  ))}
+                </div>
+              </motion.section>
+            )}
+
+            {!worldSongs.length && !indiaSongs.length && (
+              <div className="empty-state glass-card">
+                <p>Seems like we're having trouble reaching the music charts.</p>
+                <p style={{ fontSize: '0.9rem', marginTop: '10px' }}>Try searching for your favorite artist above!</p>
               </div>
-            </motion.section>
+            )}
           </motion.div>
         )}
       </AnimatePresence>
