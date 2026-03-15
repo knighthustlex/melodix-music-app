@@ -5,21 +5,31 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { 
   Search, Play, Pause, SkipForward, SkipBack, Music, Home, 
   TrendingUp, X, Loader2, Globe, ChevronDown, Repeat, Shuffle, 
-  Heart, Share2 
+  Heart, Share2, Repeat1
 } from 'lucide-react';
 import './App.css';
+
+type RepeatMode = 'none' | 'all' | 'one';
 
 const App: React.FC = () => {
   const [worldSongs, setWorldSongs] = useState<Song[]>([]);
   const [countrySongs, setCountrySongs] = useState<Song[]>([]);
   const [searchResults, setSearchResults] = useState<Song[]>([]);
   const [query, setQuery] = useState('');
+  
+  // Player State
   const [currentSong, setCurrentSong] = useState<Song | null>(null);
+  const [currentQueue, setCurrentQueue] = useState<Song[]>([]);
+  const [currentIndex, setCurrentIndex] = useState(-1);
   const [isPlaying, setIsPlaying] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [isSearching, setIsSearching] = useState(false);
   const [isExpanded, setIsExpanded] = useState(false);
   const [progress, setProgress] = useState(0);
+  
+  // Queue Control State
+  const [isShuffle, setIsShuffle] = useState(false);
+  const [repeatMode, setRepeatMode] = useState<RepeatMode>('none');
   
   const audioRef = useRef<HTMLAudioElement | null>(null);
 
@@ -62,15 +72,45 @@ const App: React.FC = () => {
     setQuery('');
   };
 
-  const playSong = (song: Song) => {
+  const playSong = (song: Song, queue: Song[]) => {
+    const index = queue.findIndex(s => s.id === song.id);
+    setCurrentQueue(queue);
+    setCurrentIndex(index);
     setCurrentSong(song);
     setIsPlaying(true);
+    
     if (audioRef.current) {
       const source = song.download['320kbps'] || song.download['160kbps'] || song.download['96kbps'];
       audioRef.current.src = source;
       audioRef.current.load();
       audioRef.current.play().catch(console.error);
     }
+  };
+
+  const playNext = () => {
+    if (currentQueue.length === 0) return;
+
+    let nextIndex = currentIndex;
+    if (isShuffle) {
+      nextIndex = Math.floor(Math.random() * currentQueue.length);
+    } else {
+      nextIndex = (currentIndex + 1) % currentQueue.length;
+    }
+
+    // If repeat is none and we reached the end
+    if (repeatMode === 'none' && !isShuffle && nextIndex === 0 && currentIndex === currentQueue.length - 1) {
+      setIsPlaying(false);
+      return;
+    }
+
+    const nextSong = currentQueue[nextIndex];
+    playSong(nextSong, currentQueue);
+  };
+
+  const playPrevious = () => {
+    if (currentQueue.length === 0) return;
+    const prevIndex = (currentIndex - 1 + currentQueue.length) % currentQueue.length;
+    playSong(currentQueue[prevIndex], currentQueue);
   };
 
   const togglePlay = (e?: React.MouseEvent) => {
@@ -95,6 +135,17 @@ const App: React.FC = () => {
     }
   };
 
+  const handleEnded = () => {
+    if (repeatMode === 'one') {
+      if (audioRef.current) {
+        audioRef.current.currentTime = 0;
+        audioRef.current.play();
+      }
+    } else {
+      playNext();
+    }
+  };
+
   const handleProgressClick = (e: React.MouseEvent<HTMLDivElement>) => {
     if (audioRef.current && isExpanded) {
       const rect = e.currentTarget.getBoundingClientRect();
@@ -102,6 +153,12 @@ const App: React.FC = () => {
       const percentage = x / rect.width;
       audioRef.current.currentTime = percentage * audioRef.current.duration;
     }
+  };
+
+  const toggleRepeat = () => {
+    if (repeatMode === 'none') setRepeatMode('all');
+    else if (repeatMode === 'all') setRepeatMode('one');
+    else setRepeatMode('none');
   };
 
   // Animation variants
@@ -161,7 +218,7 @@ const App: React.FC = () => {
                 </div>
                 <div className="songs-grid">
                   {searchResults.map(song => (
-                    <div key={song.id} className="song-list-item" onClick={() => playSong(song)}>
+                    <div key={song.id} className="song-list-item" onClick={() => playSong(song, searchResults)}>
                       <img src={song.image['150x150']} alt={song.title} className="song-list-image" />
                       <div className="player-info">
                         <div className="player-title">{song.title}</div>
@@ -188,7 +245,7 @@ const App: React.FC = () => {
                   </div>
                   <div className="horizontal-scroll">
                     {worldSongs.map(song => (
-                      <motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }} key={song.id} className="trending-card" onClick={() => playSong(song)}>
+                      <motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }} key={song.id} className="trending-card" onClick={() => playSong(song, worldSongs)}>
                         <img src={song.image['500x500']} alt={song.title} className="trending-image" />
                         <div className="player-title">{song.title}</div>
                         <div className="player-artist">{song.artist}</div>
@@ -206,7 +263,7 @@ const App: React.FC = () => {
                   </div>
                   <div className="songs-grid">
                     {countrySongs.map(song => (
-                      <div key={song.id} className="song-list-item" onClick={() => playSong(song)}>
+                      <div key={song.id} className="song-list-item" onClick={() => playSong(song, countrySongs)}>
                         <img src={song.image['150x150']} alt={song.title} className="song-list-image" />
                         <div className="player-info">
                           <div className="player-title">{song.title}</div>
@@ -227,12 +284,12 @@ const App: React.FC = () => {
       <audio 
         ref={audioRef} 
         onTimeUpdate={handleTimeUpdate}
-        onEnded={() => setIsPlaying(false)} 
+        onEnded={handleEnded} 
         onPlay={() => setIsPlaying(true)}
         onPause={() => setIsPlaying(false)}
       />
 
-      {/* Floating Player Logic */}
+      {/* Player Logic */}
       <AnimatePresence>
         {currentSong && (
           <motion.div 
@@ -251,8 +308,8 @@ const App: React.FC = () => {
                     <ChevronDown size={32} />
                   </button>
                   <div style={{ textAlign: 'center' }}>
-                    <div style={{ fontSize: '0.8rem', opacity: 0.6, textTransform: 'uppercase', letterSpacing: '1px' }}>Playing from Charts</div>
-                    <div style={{ fontWeight: 600 }}>USA Top Hits</div>
+                    <div style={{ fontSize: '0.8rem', opacity: 0.6, textTransform: 'uppercase', letterSpacing: '1px' }}>Now Playing</div>
+                    <div style={{ fontWeight: 600 }}>Queue ({currentIndex + 1}/{currentQueue.length})</div>
                   </div>
                   <button className="clear-btn" style={{ padding: '10px' }}><Share2 size={24} /></button>
                 </div>
@@ -288,13 +345,24 @@ const App: React.FC = () => {
                   </div>
 
                   <div className="playback-buttons">
-                    <Shuffle size={24} style={{ opacity: 0.5 }} />
-                    <SkipBack size={32} fill="white" />
-                    <button className="play-btn btn-large" onClick={togglePlay}>
+                    <Shuffle 
+                      size={24} 
+                      onClick={() => setIsShuffle(!isShuffle)} 
+                      color={isShuffle ? 'var(--secondary-color)' : 'white'}
+                      style={{ opacity: isShuffle ? 1 : 0.5, cursor: 'pointer' }} 
+                    />
+                    <SkipBack size={32} fill="white" onClick={playPrevious} style={{ cursor: 'pointer' }} />
+                    <button className="play-btn btn-large" onClick={() => togglePlay()}>
                       {isPlaying ? <Pause size={32} fill="black" /> : <Play size={32} fill="black" />}
                     </button>
-                    <SkipForward size={32} fill="white" />
-                    <Repeat size={24} style={{ opacity: 0.5 }} />
+                    <SkipForward size={32} fill="white" onClick={playNext} style={{ cursor: 'pointer' }} />
+                    <div onClick={toggleRepeat} style={{ cursor: 'pointer' }}>
+                      {repeatMode === 'one' ? (
+                        <Repeat1 size={24} color="var(--secondary-color)" />
+                      ) : (
+                        <Repeat size={24} color={repeatMode === 'all' ? 'var(--secondary-color)' : 'white'} style={{ opacity: repeatMode === 'all' ? 1 : 0.5 }} />
+                      )}
+                    </div>
                   </div>
                 </div>
               </>
