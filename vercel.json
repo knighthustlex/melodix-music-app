@@ -3,6 +3,10 @@
     {
       "source": "/api/v1/:path*",
       "destination": "https://flip-saavn.vercel.app/:path*"
+    },
+    {
+      "source": "/api/lyrics",
+      "destination": "https://flip-lyrics.vercel.app/api/lyrics"
     }
   ]
 }

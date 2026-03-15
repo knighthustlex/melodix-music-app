@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import type { Song } from './services/api';
-import { getTopWorld, getTopByCountry, searchSongs } from './services/api';
+import { getTopWorld, getTopByCountry, searchSongs, getLyrics } from './services/api';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
   Search, Play, Pause, SkipForward, SkipBack, Music, Home, 
@@ -10,6 +10,12 @@ import {
 import './App.css';
 
 type RepeatMode = 'none' | 'all' | 'one';
+type PlayerTab = 'player' | 'lyrics';
+
+interface ParsedLyric {
+  time: number;
+  text: string;
+}
 
 const App: React.FC = () => {
   const [worldSongs, setWorldSongs] = useState<Song[]>([]);
@@ -27,11 +33,18 @@ const App: React.FC = () => {
   const [isExpanded, setIsExpanded] = useState(false);
   const [progress, setProgress] = useState(0);
   
+  // Lyrics State
+  const [activeTab, setActiveTab] = useState<PlayerTab>('player');
+  const [lyrics, setLyrics] = useState<ParsedLyric[]>([]);
+  const [activeLyricIndex, setActiveLyricIndex] = useState(-1);
+  const [isLyricsLoading, setIsLyricsLoading] = useState(false);
+  
   // Queue Control State
   const [isShuffle, setIsShuffle] = useState(false);
   const [repeatMode, setRepeatMode] = useState<RepeatMode>('none');
   
   const audioRef = useRef<HTMLAudioElement | null>(null);
+  const lyricsContainerRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
     loadInitialData();
@@ -50,6 +63,41 @@ const App: React.FC = () => {
       console.error("Failed to load charts", error);
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  const parseSyncedLyrics = (lrc: string): ParsedLyric[] => {
+    const lines = lrc.split('\n');
+    const parsed: ParsedLyric[] = [];
+    const timeRegex = /\[(\d{2}):(\d{2})\.(\d{2})\]/;
+
+    lines.forEach(line => {
+      const match = line.match(timeRegex);
+      if (match) {
+        const minutes = parseInt(match[1]);
+        const seconds = parseInt(match[2]);
+        const milliseconds = parseInt(match[3]);
+        const time = minutes * 60 + seconds + milliseconds / 100;
+        const text = line.replace(timeRegex, '').trim();
+        if (text) parsed.push({ time, text });
+      }
+    });
+    return parsed;
+  };
+
+  const fetchSongLyrics = async (song: Song) => {
+    setIsLyricsLoading(true);
+    setLyrics([]);
+    setActiveLyricIndex(-1);
+    try {
+      const data = await getLyrics(song.artist, song.title);
+      if (data && data.synced) {
+        setLyrics(parseSyncedLyrics(data.synced));
+      }
+    } catch (err) {
+      console.error("Lyrics error", err);
+    } finally {
+      setIsLyricsLoading(false);
     }
   };
 
@@ -78,6 +126,7 @@ const App: React.FC = () => {
     setCurrentIndex(index);
     setCurrentSong(song);
     setIsPlaying(true);
+    fetchSongLyrics(song);
     
     if (audioRef.current) {
       const source = song.download['320kbps'] || song.download['160kbps'] || song.download['96kbps'];
@@ -89,22 +138,17 @@ const App: React.FC = () => {
 
   const playNext = () => {
     if (currentQueue.length === 0) return;
-
     let nextIndex = currentIndex;
     if (isShuffle) {
       nextIndex = Math.floor(Math.random() * currentQueue.length);
     } else {
       nextIndex = (currentIndex + 1) % currentQueue.length;
     }
-
-    // If repeat is none and we reached the end
     if (repeatMode === 'none' && !isShuffle && nextIndex === 0 && currentIndex === currentQueue.length - 1) {
       setIsPlaying(false);
       return;
     }
-
-    const nextSong = currentQueue[nextIndex];
-    playSong(nextSong, currentQueue);
+    playSong(currentQueue[nextIndex], currentQueue);
   };
 
   const playPrevious = () => {
@@ -131,6 +175,26 @@ const App: React.FC = () => {
       const total = audioRef.current.duration;
       if (total) {
         setProgress((current / total) * 100);
+      }
+
+      // Update Active Lyric
+      if (lyrics.length > 0) {
+        const index = lyrics.findIndex((lyric, i) => {
+          const nextLyric = lyrics[i + 1];
+          return current >= lyric.time && (!nextLyric || current < nextLyric.time);
+        });
+        if (index !== -1 && index !== activeLyricIndex) {
+          setActiveLyricIndex(index);
+          // Scroll to active lyric
+          const lyricEl = document.getElementById(`lyric-${index}`);
+          if (lyricEl && lyricsContainerRef.current) {
+            const container = lyricsContainerRef.current;
+            container.scrollTo({
+              top: lyricEl.offsetTop - container.offsetHeight / 2 + lyricEl.offsetHeight / 2,
+              behavior: 'smooth'
+            });
+          }
+        }
       }
     }
   };
@@ -311,29 +375,66 @@ const App: React.FC = () => {
                     <div style={{ fontSize: '0.8rem', opacity: 0.6, textTransform: 'uppercase', letterSpacing: '1px' }}>Now Playing</div>
                     <div style={{ fontWeight: 600 }}>Queue ({currentIndex + 1}/{currentQueue.length})</div>
                   </div>
-                  <div style={{ width: '52px' }}></div> {/* Spacer to keep title centered */}
+                  <div style={{ width: '52px' }}></div>
                 </div>
 
-                <div className="player-artwork-container">
-                  <motion.div 
-                    layoutId="artwork-container" 
-                    className="player-artwork-wrapper"
-                  >
-                    <motion.img 
-                      layoutId="artwork-img"
-                      src={currentSong.image.original} 
-                      alt={currentSong.title} 
-                      className="player-artwork-expanded"
-                    />
-                  </motion.div>
+                <div className="player-tabs">
+                  <button className={`tab-btn ${activeTab === 'player' ? 'active' : ''}`} onClick={() => setActiveTab('player')}>Player</button>
+                  <button className={`tab-btn ${activeTab === 'lyrics' ? 'active' : ''}`} onClick={() => setActiveTab('lyrics')}>Lyrics</button>
                 </div>
 
-                <div className="player-details-expanded">
-                  <div>
-                    <h1 className="player-title-expanded">{currentSong.title}</h1>
-                    <p className="player-artist-expanded">{currentSong.artist}</p>
-                  </div>
-                </div>
+                <AnimatePresence mode="wait">
+                  {activeTab === 'player' ? (
+                    <motion.div 
+                      key="player-tab" 
+                      initial={{ opacity: 0, x: -20 }} 
+                      animate={{ opacity: 1, x: 0 }} 
+                      exit={{ opacity: 0, x: 20 }}
+                      style={{ flex: 1, display: 'flex', flexDirection: 'column' }}
+                    >
+                      <div className="player-artwork-container">
+                        <motion.div layoutId="artwork-container" className="player-artwork-wrapper">
+                          <motion.img layoutId="artwork-img" src={currentSong.image.original} alt={currentSong.title} className="player-artwork-expanded" />
+                        </motion.div>
+                      </div>
+
+                      <div className="player-details-expanded">
+                        <h1 className="player-title-expanded">{currentSong.title}</h1>
+                        <p className="player-artist-expanded">{currentSong.artist}</p>
+                      </div>
+                    </motion.div>
+                  ) : (
+                    <motion.div 
+                      key="lyrics-tab" 
+                      initial={{ opacity: 0, x: 20 }} 
+                      animate={{ opacity: 1, x: 0 }} 
+                      exit={{ opacity: 0, x: -20 }}
+                      className="lyrics-container"
+                      ref={lyricsContainerRef}
+                    >
+                      {isLyricsLoading ? (
+                        <div className="lyrics-placeholder">
+                          <Loader2 size={30} className="spin" />
+                        </div>
+                      ) : lyrics.length > 0 ? (
+                        lyrics.map((lyric, i) => (
+                          <div 
+                            key={i} 
+                            id={`lyric-${i}`}
+                            className={`lyrics-line ${i === activeLyricIndex ? 'active' : ''}`}
+                            onClick={() => {
+                              if (audioRef.current) audioRef.current.currentTime = lyric.time;
+                            }}
+                          >
+                            {lyric.text}
+                          </div>
+                        ))
+                      ) : (
+                        <div className="lyrics-placeholder">No lyrics available for this track.</div>
+                      )}
+                    </motion.div>
+                  )}
+                </AnimatePresence>
 
                 <div className="player-controls-expanded">
                   <div className="progress-container">
@@ -347,23 +448,14 @@ const App: React.FC = () => {
                   </div>
 
                   <div className="playback-buttons">
-                    <Shuffle 
-                      size={24} 
-                      onClick={() => setIsShuffle(!isShuffle)} 
-                      color={isShuffle ? 'var(--secondary-color)' : 'white'}
-                      style={{ opacity: isShuffle ? 1 : 0.5, cursor: 'pointer' }} 
-                    />
+                    <Shuffle size={24} onClick={() => setIsShuffle(!isShuffle)} color={isShuffle ? 'var(--secondary-color)' : 'white'} style={{ opacity: isShuffle ? 1 : 0.5, cursor: 'pointer' }} />
                     <SkipBack size={32} fill="white" onClick={playPrevious} style={{ cursor: 'pointer' }} />
                     <button className="play-btn btn-large" onClick={() => togglePlay()}>
                       {isPlaying ? <Pause size={32} fill="black" /> : <Play size={32} fill="black" />}
                     </button>
                     <SkipForward size={32} fill="white" onClick={playNext} style={{ cursor: 'pointer' }} />
                     <div onClick={toggleRepeat} style={{ cursor: 'pointer' }}>
-                      {repeatMode === 'one' ? (
-                        <Repeat1 size={24} color="var(--secondary-color)" />
-                      ) : (
-                        <Repeat size={24} color={repeatMode === 'all' ? 'var(--secondary-color)' : 'white'} style={{ opacity: repeatMode === 'all' ? 1 : 0.5 }} />
-                      )}
+                      {repeatMode === 'one' ? <Repeat1 size={24} color="var(--secondary-color)" /> : <Repeat size={24} color={repeatMode === 'all' ? 'var(--secondary-color)' : 'white'} style={{ opacity: repeatMode === 'all' ? 1 : 0.5 }} />}
                     </div>
                   </div>
                 </div>
@@ -371,16 +463,8 @@ const App: React.FC = () => {
             ) : (
               <div className="player-main" onClick={() => setIsExpanded(true)}>
                 <div className="player-mini-clickable">
-                  <motion.div 
-                    layoutId="artwork-container" 
-                    className="song-list-image"
-                  >
-                    <motion.img 
-                      layoutId="artwork-img"
-                      src={currentSong.image['150x150']} 
-                      alt={currentSong.title} 
-                      className="player-artwork-expanded" 
-                    />
+                  <motion.div layoutId="artwork-container" className="song-list-image">
+                    <motion.img layoutId="artwork-img" src={currentSong.image['150x150']} alt={currentSong.title} className="player-artwork-expanded" />
                   </motion.div>
                   <div className="player-info">
                     <div className="player-title">{currentSong.title}</div>
