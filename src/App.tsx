@@ -185,14 +185,12 @@ const App: React.FC = () => {
         });
         if (index !== -1 && index !== activeLyricIndex) {
           setActiveLyricIndex(index);
-          // Scroll to active lyric
+          // Precise scrolling to center
           const lyricEl = document.getElementById(`lyric-${index}`);
           if (lyricEl && lyricsContainerRef.current) {
             const container = lyricsContainerRef.current;
-            container.scrollTo({
-              top: lyricEl.offsetTop - container.offsetHeight / 2 + lyricEl.offsetHeight / 2,
-              behavior: 'smooth'
-            });
+            const top = lyricEl.offsetTop - (container.clientHeight / 2) + (lyricEl.clientHeight / 2);
+            container.scrollTo({ top, behavior: 'smooth' });
           }
         }
       }
