@@ -200,6 +200,7 @@ body {
   height: 52px;
   border-radius: 14px;
   object-fit: cover;
+  overflow: hidden;
 }
 
 /* Music Player */
@@ -372,13 +373,19 @@ body {
   padding: 20px 0;
 }
 
+.player-artwork-wrapper {
+  width: 100%;
+  max-width: 300px;
+  aspect-ratio: 1/1;
+  border-radius: 80px; /* Perfect Squarcle */
+  overflow: hidden;
+  box-shadow: 0 30px 60px rgba(0, 0, 0, 0.5);
+}
+
 .player-artwork-expanded {
   width: 100%;
-  max-width: 320px;
-  aspect-ratio: 1/1;
-  border-radius: 80px; /* Stronger squarcle for 320px width */
+  height: 100%;
   object-fit: cover;
-  box-shadow: 0 30px 60px rgba(0, 0, 0, 0.5);
 }
 
 .player-details-expanded {

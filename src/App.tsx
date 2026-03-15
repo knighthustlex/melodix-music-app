@@ -315,12 +315,17 @@ const App: React.FC = () => {
                 </div>
 
                 <div className="player-artwork-container">
-                  <motion.img 
-                    layoutId="artwork"
-                    src={currentSong.image.original} 
-                    alt={currentSong.title} 
-                    className="player-artwork-expanded"
-                  />
+                  <motion.div 
+                    layoutId="artwork-container" 
+                    className="player-artwork-wrapper"
+                  >
+                    <motion.img 
+                      layoutId="artwork-img"
+                      src={currentSong.image.original} 
+                      alt={currentSong.title} 
+                      className="player-artwork-expanded"
+                    />
+                  </motion.div>
                 </div>
 
                 <div className="player-details-expanded">
@@ -366,13 +371,17 @@ const App: React.FC = () => {
             ) : (
               <div className="player-main" onClick={() => setIsExpanded(true)}>
                 <div className="player-mini-clickable">
-                  <motion.img 
-                    layoutId="artwork"
-                    src={currentSong.image['150x150']} 
-                    alt={currentSong.title} 
-                    className="song-list-image" 
-                    style={{ borderRadius: '12px' }} 
-                  />
+                  <motion.div 
+                    layoutId="artwork-container" 
+                    className="song-list-image"
+                  >
+                    <motion.img 
+                      layoutId="artwork-img"
+                      src={currentSong.image['150x150']} 
+                      alt={currentSong.title} 
+                      className="player-artwork-expanded" 
+                    />
+                  </motion.div>
                   <div className="player-info">
                     <div className="player-title">{currentSong.title}</div>
                     <div className="player-artist">{currentSong.artist}</div>
