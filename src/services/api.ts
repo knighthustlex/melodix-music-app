@@ -35,6 +35,28 @@ export const getTopWorld = async (limit: number = 20): Promise<Song[]> => {
   }
 };
 
+export const getTopByCountry = async (country: string, limit: number = 20): Promise<Song[]> => {
+  try {
+    const response = await fetch(`${BASE_URL}/top=${country.toLowerCase()}?limit=${limit}`);
+    const data = await response.json();
+    return data.chart || [];
+  } catch (error) {
+    console.error(`API Error (getTopByCountry - ${country}):`, error);
+    return [];
+  }
+};
+
+export const getCountries = async (): Promise<string[]> => {
+  try {
+    const response = await fetch(`${BASE_URL}/countries`);
+    const data = await response.json();
+    return data.countries || [];
+  } catch (error) {
+    console.error("API Error (getCountries):", error);
+    return [];
+  }
+};
+
 export const searchSongs = async (query: string, limit: number = 20): Promise<Song[]> => {
   try {
     const response = await fetch(`${BASE_URL}/search?query=${encodeURIComponent(query)}&limit=${limit}`);
@@ -42,17 +64,6 @@ export const searchSongs = async (query: string, limit: number = 20): Promise<So
     return data.results || [];
   } catch (error) {
     console.error("API Error (searchSongs):", error);
-    return [];
-  }
-};
-
-export const getTopIndia = async (limit: number = 20): Promise<Song[]> => {
-  try {
-    const response = await fetch(`${BASE_URL}/top=india?limit=${limit}`);
-    const data = await response.json();
-    return data.chart || [];
-  } catch (error) {
-    console.error("API Error (getTopIndia):", error);
     return [];
   }
 };

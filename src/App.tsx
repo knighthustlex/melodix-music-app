@@ -1,38 +1,61 @@
 import React, { useState, useEffect, useRef } from 'react';
 import type { Song } from './services/api';
-import { getTopWorld, getTopIndia, searchSongs } from './services/api';
+import { getTopWorld, getTopByCountry, getCountries, searchSongs } from './services/api';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Search, Play, Pause, SkipForward, SkipBack, Music, Home, TrendingUp, X, Loader2 } from 'lucide-react';
+import { Search, Play, Pause, SkipForward, SkipBack, Music, Home, TrendingUp, X, Loader2, Globe } from 'lucide-react';
 import './App.css';
 
 const App: React.FC = () => {
   const [worldSongs, setWorldSongs] = useState<Song[]>([]);
-  const [indiaSongs, setIndiaSongs] = useState<Song[]>([]);
+  const [countrySongs, setCountrySongs] = useState<Song[]>([]);
+  const [countries, setCountries] = useState<string[]>([]);
+  const [selectedCountry, setSelectedCountry] = useState('usa');
   const [searchResults, setSearchResults] = useState<Song[]>([]);
   const [query, setQuery] = useState('');
   const [currentSong, setCurrentSong] = useState<Song | null>(null);
   const [isPlaying, setIsPlaying] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [isSearching, setIsSearching] = useState(false);
+  const [isCountryLoading, setIsCountryLoading] = useState(false);
   const audioRef = useRef<HTMLAudioElement | null>(null);
 
   useEffect(() => {
     loadInitialData();
   }, []);
 
+  useEffect(() => {
+    if (!isLoading) {
+      loadCountrySongs();
+    }
+  }, [selectedCountry]);
+
   const loadInitialData = async () => {
     try {
       setIsLoading(true);
-      const [world, india] = await Promise.all([
+      const [world, initialCountry, countryList] = await Promise.all([
         getTopWorld(12),
-        getTopIndia(12)
+        getTopByCountry('usa', 12),
+        getCountries()
       ]);
       setWorldSongs(world || []);
-      setIndiaSongs(india || []);
+      setCountrySongs(initialCountry || []);
+      setCountries(countryList || []);
     } catch (error) {
       console.error("Failed to load charts", error);
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  const loadCountrySongs = async () => {
+    try {
+      setIsCountryLoading(true);
+      const data = await getTopByCountry(selectedCountry, 12);
+      setCountrySongs(data || []);
+    } catch (error) {
+      console.error("Failed to load country charts", error);
+    } finally {
+      setIsCountryLoading(false);
     }
   };
 
@@ -98,24 +121,15 @@ const App: React.FC = () => {
 
   return (
     <div className="app-container">
-      {/* Background Decor */}
       <div style={{ position: 'fixed', top: '10%', left: '10%', width: '40vw', height: '40vw', background: 'radial-gradient(circle, rgba(124, 77, 255, 0.08) 0%, transparent 70%)', zIndex: -1 }}></div>
 
       <header className="header">
         <div className="nav-bar">
-          <motion.div 
-            initial={{ opacity: 0, x: -20 }}
-            animate={{ opacity: 1, x: 0 }}
-            className="logo"
-          >
-            <div className="logo-circle">
-              <Music size={20} color="white" />
-            </div>
+          <motion.div initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} className="logo">
+            <div className="logo-circle"><Music size={20} color="white" /></div>
             Melodix
           </motion.div>
-          <div style={{ display: 'flex', gap: '15px' }}>
-            <Home size={24} className="text-secondary" />
-          </div>
+          <Home size={24} className="text-secondary" />
         </div>
 
         <form onSubmit={handleSearch} className="search-bar-wrapper">
@@ -123,46 +137,29 @@ const App: React.FC = () => {
           <input 
             type="text" 
             className="search-input" 
-            placeholder="What's your vibe today?" 
+            placeholder="Search your vibe..." 
             value={query}
             onChange={(e) => setQuery(e.target.value)}
           />
           {isSearching ? (
              <Loader2 size={18} className="search-icon spin" style={{ left: 'auto', right: '18px' }} />
           ) : query && (
-            <X 
-              size={18} 
-              className="search-icon" 
-              style={{ left: 'auto', right: '18px', cursor: 'pointer' }} 
-              onClick={clearSearch}
-            />
+            <X size={18} className="search-icon" style={{ left: 'auto', right: '18px', cursor: 'pointer' }} onClick={clearSearch} />
           )}
         </form>
       </header>
 
       <AnimatePresence mode="wait">
         {isLoading ? (
-          <motion.div 
-            key="loading"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="empty-state"
-          >
+          <motion.div key="loading" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="empty-state">
             <Loader2 size={40} className="spin" style={{ margin: '0 auto 20px', display: 'block' }} />
             <p>Tuning into the world's best music...</p>
           </motion.div>
         ) : searchResults.length > 0 ? (
-          <motion.section 
-            key="search-results"
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -20 }}
-            className="glass-card"
-          >
+          <motion.section key="search-results" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -20 }} className="glass-card">
             <div className="section-header">
               <h2>Search Results</h2>
-              <button onClick={clearSearch} style={{ background: 'transparent', border: 'none', color: 'var(--primary-color)', fontWeight: 600, cursor: 'pointer' }}>Clear</button>
+              <button onClick={clearSearch} className="clear-btn">Clear</button>
             </div>
             <div className="songs-grid">
               {searchResults.map(song => (
@@ -178,51 +175,56 @@ const App: React.FC = () => {
             </div>
           </motion.section>
         ) : (
-          <motion.div
-            key="home-content"
-            variants={containerVariants}
-            initial="hidden"
-            animate="show"
-            style={{ display: 'flex', flexDirection: 'column', gap: '40px' }}
-          >
+          <motion.div key="home-content" variants={containerVariants} initial="hidden" animate="show" style={{ display: 'flex', flexDirection: 'column', gap: '40px' }}>
             <section className="hero">
               <motion.h1 variants={itemVariants}>Discover Your <br/><span style={{ color: 'var(--secondary-color)' }}>Next Favorite</span></motion.h1>
               <motion.p variants={itemVariants}>Thousands of tracks, one destination.</motion.p>
             </section>
 
-            {worldSongs.length > 0 && (
-              <motion.section variants={itemVariants}>
-                <div className="section-header">
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                    <TrendingUp size={20} color="var(--accent-color)" />
-                    <h2>Trending Globally</h2>
-                  </div>
+            <motion.section variants={itemVariants}>
+              <div className="section-header">
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <TrendingUp size={20} color="var(--accent-color)" />
+                  <h2>Trending Globally</h2>
                 </div>
-                <div className="horizontal-scroll">
-                  {worldSongs.map(song => (
-                    <motion.div 
-                      whileHover={{ scale: 1.05 }}
-                      whileTap={{ scale: 0.95 }}
-                      key={song.id} 
-                      className="trending-card" 
-                      onClick={() => playSong(song)}
-                    >
-                      <img src={song.image['500x500']} alt={song.title} className="trending-image" />
-                      <div className="player-title">{song.title}</div>
-                      <div className="player-artist">{song.artist}</div>
-                    </motion.div>
-                  ))}
-                </div>
-              </motion.section>
-            )}
+              </div>
+              <div className="horizontal-scroll">
+                {worldSongs.map(song => (
+                  <motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }} key={song.id} className="trending-card" onClick={() => playSong(song)}>
+                    <img src={song.image['500x500']} alt={song.title} className="trending-image" />
+                    <div className="player-title">{song.title}</div>
+                    <div className="player-artist">{song.artist}</div>
+                  </motion.div>
+                ))}
+              </div>
+            </motion.section>
 
-            {indiaSongs.length > 0 && (
-              <motion.section variants={itemVariants} className="glass-card">
-                <div className="section-header">
-                  <h2>Top in India</h2>
+            <motion.section variants={itemVariants} className="glass-card">
+              <div className="section-header">
+                <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                  <Globe size={20} color="var(--primary-color)" />
+                  <h2>Top in {selectedCountry.toUpperCase()}</h2>
                 </div>
+                <div className="dropdown-container">
+                  <select 
+                    value={selectedCountry} 
+                    onChange={(e) => setSelectedCountry(e.target.value)}
+                    className="country-select"
+                  >
+                    {countries.map(c => (
+                      <option key={c} value={c}>{c.charAt(0).toUpperCase() + c.slice(1)}</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              {isCountryLoading ? (
+                <div style={{ padding: '40px 0', textAlign: 'center' }}>
+                  <Loader2 size={30} className="spin" style={{ margin: '0 auto' }} />
+                </div>
+              ) : (
                 <div className="songs-grid">
-                  {indiaSongs.map(song => (
+                  {countrySongs.map(song => (
                     <div key={song.id} className="song-list-item" onClick={() => playSong(song)}>
                       <img src={song.image['150x150']} alt={song.title} className="song-list-image" />
                       <div className="player-info">
@@ -233,27 +235,15 @@ const App: React.FC = () => {
                     </div>
                   ))}
                 </div>
-              </motion.section>
-            )}
-
-            {!worldSongs.length && !indiaSongs.length && (
-              <div className="empty-state glass-card">
-                <p>Seems like we're having trouble reaching the music charts.</p>
-                <p style={{ fontSize: '0.9rem', marginTop: '10px' }}>Try searching for your favorite artist above!</p>
-              </div>
-            )}
+              )}
+            </motion.section>
           </motion.div>
         )}
       </AnimatePresence>
 
       <AnimatePresence>
         {currentSong && (
-          <motion.div 
-            initial={{ y: 100, opacity: 0 }}
-            animate={{ y: 0, opacity: 1 }}
-            exit={{ y: 100, opacity: 0 }}
-            className="player-container"
-          >
+          <motion.div initial={{ y: 100, opacity: 0 }} animate={{ y: 0, opacity: 1 }} exit={{ y: 100, opacity: 0 }} className="player-container">
             <div className="player-main">
               <img src={currentSong.image['150x150']} alt={currentSong.title} className="song-list-image" style={{ borderRadius: '12px' }} />
               <div className="player-info">
@@ -267,12 +257,7 @@ const App: React.FC = () => {
                 </button>
                 <SkipForward size={24} fill="white" style={{ opacity: 0.5 }} />
               </div>
-              <audio 
-                ref={audioRef} 
-                onEnded={() => setIsPlaying(false)} 
-                onPlay={() => setIsPlaying(true)}
-                onPause={() => setIsPlaying(false)}
-              />
+              <audio ref={audioRef} onEnded={() => setIsPlaying(false)} onPlay={() => setIsPlaying(true)} onPause={() => setIsPlaying(false)} />
             </div>
           </motion.div>
         )}

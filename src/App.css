@@ -297,3 +297,36 @@ body {
 }
 @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
 .spin { animation: spin 1s linear infinite; }
+
+.country-select {
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid var(--glass-border);
+  border-radius: 12px;
+  color: white;
+  padding: 8px 12px;
+  outline: none;
+  cursor: pointer;
+  font-size: 0.9rem;
+  transition: all 0.2s ease;
+}
+.country-select:hover {
+  background: rgba(255, 255, 255, 0.1);
+}
+.country-select option {
+  background: #1a1b3a;
+  color: white;
+}
+.clear-btn {
+  background: transparent;
+  border: none;
+  color: var(--primary-color);
+  font-weight: 600;
+  cursor: pointer;
+  font-size: 0.9rem;
+  padding: 5px 10px;
+  border-radius: 8px;
+  transition: background 0.2s;
+}
+.clear-btn:hover {
+  background: rgba(124, 77, 255, 0.1);
+}
