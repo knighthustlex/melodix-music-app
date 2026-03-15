@@ -5,7 +5,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { 
   Search, Play, Pause, SkipForward, SkipBack, Music, Home, 
   TrendingUp, X, Loader2, Globe, ChevronDown, Repeat, Shuffle, 
-  Heart, Share2, Repeat1
+  Repeat1
 } from 'lucide-react';
 import './App.css';
 
@@ -311,7 +311,7 @@ const App: React.FC = () => {
                     <div style={{ fontSize: '0.8rem', opacity: 0.6, textTransform: 'uppercase', letterSpacing: '1px' }}>Now Playing</div>
                     <div style={{ fontWeight: 600 }}>Queue ({currentIndex + 1}/{currentQueue.length})</div>
                   </div>
-                  <button className="clear-btn" style={{ padding: '10px' }}><Share2 size={24} /></button>
+                  <div style={{ width: '52px' }}></div> {/* Spacer to keep title centered */}
                 </div>
 
                 <div className="player-artwork-container">
@@ -324,12 +324,9 @@ const App: React.FC = () => {
                 </div>
 
                 <div className="player-details-expanded">
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <div>
-                      <h1 className="player-title-expanded">{currentSong.title}</h1>
-                      <p className="player-artist-expanded">{currentSong.artist}</p>
-                    </div>
-                    <Heart size={28} color="var(--primary-color)" />
+                  <div>
+                    <h1 className="player-title-expanded">{currentSong.title}</h1>
+                    <p className="player-artist-expanded">{currentSong.artist}</p>
                   </div>
                 </div>
 
