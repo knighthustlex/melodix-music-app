@@ -35,7 +35,7 @@ const App: React.FC = () => {
   const [isDownloading, setIsDownloading] = useState(false);
   
   // Theme State
-  const [themeColors, setThemeColors] = useState({ primary: '#7c4dff', secondary: '#00e5ff' });
+  const [, setThemeColors] = useState({ primary: '#7c4dff', secondary: '#00e5ff' });
   
   // Lyrics State
   const [activeTab, setActiveTab] = useState<PlayerTab>('player');
@@ -99,16 +99,26 @@ const App: React.FC = () => {
     };
   };
 
-  const initVisualizer = () => {
+  const initVisualizer = async () => {
     if (!audioRef.current || analyserRef.current) return;
-    const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
-    const source = audioContext.createMediaElementSource(audioRef.current);
-    const analyser = audioContext.createAnalyser();
-    source.connect(analyser);
-    analyser.connect(audioContext.destination);
-    analyser.fftSize = 256;
-    analyserRef.current = analyser;
-    drawVisualizer();
+    try {
+      const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
+      
+      // Resume context if it's suspended (browsers do this by default)
+      if (audioContext.state === 'suspended') {
+        await audioContext.resume();
+      }
+
+      const source = audioContext.createMediaElementSource(audioRef.current);
+      const analyser = audioContext.createAnalyser();
+      source.connect(analyser);
+      analyser.connect(audioContext.destination);
+      analyser.fftSize = 256;
+      analyserRef.current = analyser;
+      drawVisualizer();
+    } catch (err) {
+      console.error("Visualizer initialization failed:", err);
+    }
   };
 
   const drawVisualizer = () => {
@@ -120,14 +130,15 @@ const App: React.FC = () => {
     const dataArray = new Uint8Array(bufferLength);
 
     const renderFrame = () => {
+      if (!analyserRef.current) return;
       animationRef.current = requestAnimationFrame(renderFrame);
-      analyserRef.current!.getByteFrequencyData(dataArray);
+      analyserRef.current.getByteFrequencyData(dataArray);
       ctx.clearRect(0, 0, canvas.width, canvas.height);
       const barWidth = (canvas.width / bufferLength) * 2.5;
       let x = 0;
       for (let i = 0; i < bufferLength; i++) {
         const barHeight = (dataArray[i] / 255) * canvas.height;
-        ctx.fillStyle = themeColors.primary;
+        ctx.fillStyle = document.documentElement.style.getPropertyValue('--theme-primary') || '#7c4dff';
         ctx.globalAlpha = 0.6;
         ctx.fillRect(x, canvas.height - barHeight, barWidth, barHeight);
         x += barWidth + 1;
@@ -302,7 +313,14 @@ const App: React.FC = () => {
         </>
       )}
 
-      <audio ref={audioRef} onTimeUpdate={handleTimeUpdate} onEnded={() => repeatMode === 'one' ? (audioRef.current!.currentTime = 0, audioRef.current!.play()) : playNext()} onPlay={() => setIsPlaying(true)} onPause={() => setIsPlaying(false)} />
+      <audio 
+        ref={audioRef} 
+        crossOrigin="anonymous"
+        onTimeUpdate={handleTimeUpdate} 
+        onEnded={() => repeatMode === 'one' ? (audioRef.current!.currentTime = 0, audioRef.current!.play()) : playNext()} 
+        onPlay={() => setIsPlaying(true)} 
+        onPause={() => setIsPlaying(false)} 
+      />
 
       <AnimatePresence>
         {currentSong && (
