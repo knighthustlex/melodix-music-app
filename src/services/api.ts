@@ -82,7 +82,7 @@ export const searchSongs = async (query: string, limit: number = 20): Promise<So
   try {
     const response = await fetch(`${BASE_URL}/search/tracks?q=${encodeURIComponent(query)}&limit=${limit}`);
     const result = await response.json();
-    return result.status === 'success' ? result.data : [];
+    return result.status === 'success' ? result.data.tracks : [];
   } catch (error) {
     console.error("API Error (searchSongs):", error);
     return [];
