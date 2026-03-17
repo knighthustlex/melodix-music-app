@@ -49,11 +49,16 @@ const App: React.FC = () => {
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const lyricsContainerRef = useRef<HTMLDivElement | null>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const audioContextRef = useRef<AudioContext | null>(null);
   const analyserRef = useRef<AnalyserNode | null>(null);
+  const sourceRef = useRef<MediaElementAudioSourceNode | null>(null);
   const animationRef = useRef<number | null>(null);
 
   useEffect(() => {
     loadInitialData();
+    return () => {
+      if (animationRef.current) cancelAnimationFrame(animationRef.current);
+    };
   }, []);
 
   useEffect(() => {
@@ -61,6 +66,15 @@ const App: React.FC = () => {
       extractDominantColor(currentSong.image);
     }
   }, [currentSong]);
+
+  // Handle visualizer animation when expanded or tab changes
+  useEffect(() => {
+    if (isExpanded && activeTab === 'player' && canvasRef.current && analyserRef.current) {
+      drawVisualizer();
+    } else {
+      if (animationRef.current) cancelAnimationFrame(animationRef.current);
+    }
+  }, [isExpanded, activeTab, currentSong]);
 
   const loadInitialData = async () => {
     try {
@@ -94,48 +108,68 @@ const App: React.FC = () => {
     };
   };
 
-  const initVisualizer = async () => {
-    if (!audioRef.current || analyserRef.current) return;
+  const initAudioContext = async () => {
+    if (!audioRef.current || audioContextRef.current) return;
+    
     try {
-      const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
-      if (audioContext.state === 'suspended') {
-        await audioContext.resume();
-      }
-      const source = audioContext.createMediaElementSource(audioRef.current);
+      const AudioContextClass = (window.AudioContext || (window as any).webkitAudioContext);
+      const audioContext = new AudioContextClass();
       const analyser = audioContext.createAnalyser();
+      const source = audioContext.createMediaElementSource(audioRef.current);
+      
       source.connect(analyser);
       analyser.connect(audioContext.destination);
       analyser.fftSize = 256;
+      
+      audioContextRef.current = audioContext;
       analyserRef.current = analyser;
-      drawVisualizer();
+      sourceRef.current = source;
+
+      if (audioContext.state === 'suspended') {
+        await audioContext.resume();
+      }
     } catch (err) {
-      console.error("Visualizer initialization failed:", err);
+      console.error("AudioContext initialization failed:", err);
     }
   };
 
   const drawVisualizer = () => {
     if (!canvasRef.current || !analyserRef.current) return;
+    
     const canvas = canvasRef.current;
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
-    const bufferLength = analyserRef.current.frequencyBinCount;
+    
+    const analyser = analyserRef.current;
+    const bufferLength = analyser.frequencyBinCount;
     const dataArray = new Uint8Array(bufferLength);
 
     const renderFrame = () => {
-      if (!analyserRef.current) return;
       animationRef.current = requestAnimationFrame(renderFrame);
-      analyserRef.current.getByteFrequencyData(dataArray);
+      analyser.getByteFrequencyData(dataArray);
+      
       ctx.clearRect(0, 0, canvas.width, canvas.height);
+      
       const barWidth = (canvas.width / bufferLength) * 2.5;
       let x = 0;
+      
+      const primaryColor = getComputedStyle(document.documentElement).getPropertyValue('--theme-primary').trim() || '#7c4dff';
+      
       for (let i = 0; i < bufferLength; i++) {
         const barHeight = (dataArray[i] / 255) * canvas.height;
-        ctx.fillStyle = document.documentElement.style.getPropertyValue('--theme-primary') || '#7c4dff';
-        ctx.globalAlpha = 0.6;
+        
+        // Gradient effect
+        ctx.fillStyle = primaryColor;
+        ctx.globalAlpha = 0.7;
+        
+        // Rounded bars
         ctx.fillRect(x, canvas.height - barHeight, barWidth, barHeight);
-        x += barWidth + 1;
+        
+        x += barWidth + 2;
       }
     };
+    
+    if (animationRef.current) cancelAnimationFrame(animationRef.current);
     renderFrame();
   };
 
@@ -216,9 +250,16 @@ const App: React.FC = () => {
     try {
       const streamData = await getStream(song.id);
       if (streamData && audioRef.current) {
+        // Init AudioContext on first play interaction
+        if (!audioContextRef.current) {
+          await initAudioContext();
+        } else if (audioContextRef.current.state === 'suspended') {
+          await audioContextRef.current.resume();
+        }
+
         audioRef.current.src = streamData.stream_url;
         audioRef.current.load();
-        audioRef.current.play().then(initVisualizer).catch(console.error);
+        audioRef.current.play().catch(console.error);
       }
     } catch (err) {
       console.error("Playback failed", err);
@@ -264,7 +305,13 @@ const App: React.FC = () => {
     if (e) e.stopPropagation();
     if (audioRef.current && currentSong) {
       if (isPlaying) audioRef.current.pause();
-      else audioRef.current.play().catch(console.error);
+      else {
+        // Ensure AudioContext is resumed on play
+        if (audioContextRef.current?.state === 'suspended') {
+          audioContextRef.current.resume();
+        }
+        audioRef.current.play().catch(console.error);
+      }
       setIsPlaying(!isPlaying);
     }
   };
