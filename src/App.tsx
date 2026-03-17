@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import type { Song, Album, Playlist, HomeData } from './services/api';
 import { getHome, getStream, searchSongs, getLyrics, getAlbumTracks, getPlaylistTracks } from './services/api';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -54,6 +54,50 @@ const App: React.FC = () => {
   const sourceRef = useRef<MediaElementAudioSourceNode | null>(null);
   const animationRef = useRef<number | null>(null);
 
+  const drawVisualizer = useCallback(() => {
+    if (!canvasRef.current || !analyserRef.current) return;
+    
+    const canvas = canvasRef.current;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+    
+    const analyser = analyserRef.current;
+    const bufferLength = analyser.frequencyBinCount;
+    const dataArray = new Uint8Array(bufferLength);
+
+    const renderFrame = () => {
+      animationRef.current = requestAnimationFrame(renderFrame);
+      analyser.getByteFrequencyData(dataArray);
+      
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      
+      const barWidth = (canvas.width / bufferLength) * 2.5;
+      let x = 0;
+      
+      const primaryColor = getComputedStyle(document.documentElement).getPropertyValue('--theme-primary').trim() || '#7c4dff';
+      
+      for (let i = 0; i < bufferLength; i++) {
+        const barHeight = (dataArray[i] / 255) * canvas.height;
+        
+        ctx.fillStyle = primaryColor;
+        ctx.globalAlpha = 0.7;
+        ctx.fillRect(x, canvas.height - barHeight, barWidth, barHeight);
+        
+        x += barWidth + 2;
+      }
+    };
+    
+    if (animationRef.current) cancelAnimationFrame(animationRef.current);
+    renderFrame();
+  }, []);
+
+  const canvasCallbackRef = useCallback((node: HTMLCanvasElement | null) => {
+    canvasRef.current = node;
+    if (node && isExpanded && activeTab === 'player' && analyserRef.current) {
+      drawVisualizer();
+    }
+  }, [isExpanded, activeTab, drawVisualizer]);
+
   useEffect(() => {
     loadInitialData();
     return () => {
@@ -67,13 +111,6 @@ const App: React.FC = () => {
     }
   }, [currentSong]);
 
-  const canvasCallbackRef = (node: HTMLCanvasElement | null) => {
-    canvasRef.current = node;
-    if (node && isExpanded && activeTab === 'player' && analyserRef.current) {
-      drawVisualizer();
-    }
-  };
-
   // Handle visualizer animation when expanded or tab changes
   useEffect(() => {
     if (isExpanded && activeTab === 'player' && canvasRef.current && analyserRef.current) {
@@ -81,7 +118,7 @@ const App: React.FC = () => {
     } else {
       if (animationRef.current) cancelAnimationFrame(animationRef.current);
     }
-  }, [isExpanded, activeTab, currentSong]);
+  }, [isExpanded, activeTab, currentSong, drawVisualizer]);
 
   const loadInitialData = async () => {
     try {
@@ -138,46 +175,6 @@ const App: React.FC = () => {
     } catch (err) {
       console.error("AudioContext initialization failed:", err);
     }
-  };
-
-  const drawVisualizer = () => {
-    if (!canvasRef.current || !analyserRef.current) return;
-    
-    const canvas = canvasRef.current;
-    const ctx = canvas.getContext('2d');
-    if (!ctx) return;
-    
-    const analyser = analyserRef.current;
-    const bufferLength = analyser.frequencyBinCount;
-    const dataArray = new Uint8Array(bufferLength);
-
-    const renderFrame = () => {
-      animationRef.current = requestAnimationFrame(renderFrame);
-      analyser.getByteFrequencyData(dataArray);
-      
-      ctx.clearRect(0, 0, canvas.width, canvas.height);
-      
-      const barWidth = (canvas.width / bufferLength) * 2.5;
-      let x = 0;
-      
-      const primaryColor = getComputedStyle(document.documentElement).getPropertyValue('--theme-primary').trim() || '#7c4dff';
-      
-      for (let i = 0; i < bufferLength; i++) {
-        const barHeight = (dataArray[i] / 255) * canvas.height;
-        
-        // Gradient effect
-        ctx.fillStyle = primaryColor;
-        ctx.globalAlpha = 0.7;
-        
-        // Rounded bars
-        ctx.fillRect(x, canvas.height - barHeight, barWidth, barHeight);
-        
-        x += barWidth + 2;
-      }
-    };
-    
-    if (animationRef.current) cancelAnimationFrame(animationRef.current);
-    renderFrame();
   };
 
   const handleDownload = async () => {
@@ -257,7 +254,6 @@ const App: React.FC = () => {
     try {
       const streamData = await getStream(song.id);
       if (streamData && audioRef.current) {
-        // Init AudioContext on first play interaction
         if (!audioContextRef.current) {
           await initAudioContext();
         } else if (audioContextRef.current.state === 'suspended') {
@@ -313,7 +309,6 @@ const App: React.FC = () => {
     if (audioRef.current && currentSong) {
       if (isPlaying) audioRef.current.pause();
       else {
-        // Ensure AudioContext is resumed on play
         if (audioContextRef.current?.state === 'suspended') {
           audioContextRef.current.resume();
         }
