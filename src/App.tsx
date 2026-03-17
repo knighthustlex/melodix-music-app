@@ -67,6 +67,13 @@ const App: React.FC = () => {
     }
   }, [currentSong]);
 
+  const canvasCallbackRef = (node: HTMLCanvasElement | null) => {
+    canvasRef.current = node;
+    if (node && isExpanded && activeTab === 'player' && analyserRef.current) {
+      drawVisualizer();
+    }
+  };
+
   // Handle visualizer animation when expanded or tab changes
   useEffect(() => {
     if (isExpanded && activeTab === 'player' && canvasRef.current && analyserRef.current) {
@@ -406,7 +413,7 @@ const App: React.FC = () => {
                     <motion.div key="player-tab" initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: 20 }} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
                       <div className="player-artwork-container"><motion.div layoutId="artwork-container" className="player-artwork-wrapper"><motion.img layoutId="artwork-img" src={currentSong.image} alt={currentSong.title} className="player-artwork-expanded" /></motion.div></div>
                       <div className="player-details-expanded"><h1 className="player-title-expanded">{currentSong.title}</h1><p className="player-artist-expanded">{currentSong.artists}</p></div>
-                      <canvas ref={canvasRef} className="visualizer-canvas" width={300} height={80}></canvas>
+                      <canvas ref={canvasCallbackRef} className="visualizer-canvas" width={300} height={80}></canvas>
                     </motion.div>
                   ) : (
                     <motion.div key="lyrics-tab" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }} className="lyrics-container" ref={lyricsContainerRef}>
