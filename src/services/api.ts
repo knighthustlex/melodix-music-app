@@ -1,76 +1,121 @@
 export interface Song {
-  id: string;
+  id: string | number;
   title: string;
-  artist: string;
+  artists: string;
+  album: string;
+  album_id: string | number;
+  image: string;
   duration: string;
-  play_count: string;
-  image: {
-    "50x50": string;
-    "150x150": string;
-    "500x500": string;
-    original: string;
-  };
-  download: {
-    "12kbps": string;
-    "48kbps": string;
-    "96kbps": string;
-    "160kbps": string;
+  explicit: boolean;
+  quality: string;
+  tidal_url?: string;
+  release?: string;
+  popularity?: number;
+  isrc?: string;
+  track_number?: number;
+  // Compatibility with old interface
+  artist?: string; 
+  download?: {
     "320kbps": string;
+    "160kbps": string;
   };
-  language: string;
-  rank?: number;
 }
 
-export interface LyricsData {
-  synced: string;
-  plain: string;
+export interface Album {
+  id: string | number;
+  title: string;
+  artists: string;
+  image: string;
+  tracks: number;
+  duration: string;
+  release: string;
+  quality: string;
 }
 
-// Proxy through Vercel rewrites to avoid CORS issues
-const BASE_URL = window.location.hostname === 'localhost' ? 'https://flip-saavn.vercel.app' : '/api/v1';
+export interface Playlist {
+  uuid: string;
+  title: string;
+  image: string;
+  tracks: number;
+  type: string;
+}
+
+export interface HomeData {
+  new_tracks: Song[];
+  new_albums: Album[];
+  featured_playlists: Playlist[];
+}
+
+export interface StreamData {
+  track_id: string;
+  stream_url: string;
+  audio_quality: string;
+  codec: string;
+}
+
+const BASE_URL = 'https://flip-musix.vercel.app';
 const LYRICS_BASE_URL = window.location.hostname === 'localhost' ? 'https://flip-lyrics.vercel.app/api/lyrics' : '/api/lyrics';
 
-export const getTopWorld = async (limit: number = 20): Promise<Song[]> => {
+export const getHome = async (): Promise<HomeData | null> => {
   try {
-    const response = await fetch(`${BASE_URL}/top=world?limit=${limit}`);
-    const data = await response.json();
-    return data.chart || [];
+    const response = await fetch(`${BASE_URL}/home`);
+    const result = await response.json();
+    return result.status === 'success' ? result.data : null;
   } catch (error) {
-    console.error("API Error (getTopWorld):", error);
-    return [];
+    console.error("API Error (getHome):", error);
+    return null;
   }
 };
 
-export const getTopByCountry = async (country: string, limit: number = 20): Promise<Song[]> => {
+export const getStream = async (id: string | number): Promise<StreamData | null> => {
   try {
-    const response = await fetch(`${BASE_URL}/top=${country.toLowerCase()}?limit=${limit}`);
-    const data = await response.json();
-    return data.chart || [];
+    const response = await fetch(`${BASE_URL}/stream?id=${id}`);
+    const result = await response.json();
+    return result.status === 'success' ? result.data : null;
   } catch (error) {
-    console.error(`API Error (getTopByCountry - ${country}):`, error);
-    return [];
+    console.error("API Error (getStream):", error);
+    return null;
   }
 };
 
 export const searchSongs = async (query: string, limit: number = 20): Promise<Song[]> => {
   try {
-    const response = await fetch(`${BASE_URL}/search?query=${encodeURIComponent(query)}&limit=${limit}`);
-    const data = await response.json();
-    return data.results || [];
+    const response = await fetch(`${BASE_URL}/search/tracks?q=${encodeURIComponent(query)}&limit=${limit}`);
+    const result = await response.json();
+    return result.status === 'success' ? result.data : [];
   } catch (error) {
     console.error("API Error (searchSongs):", error);
     return [];
   }
 };
 
-export const getLyrics = async (artist: string, track: string): Promise<LyricsData | null> => {
+export const getAlbumTracks = async (id: string | number): Promise<Song[]> => {
+  try {
+    const response = await fetch(`${BASE_URL}/album?id=${id}`);
+    const result = await response.json();
+    return result.status === 'success' ? result.data.tracks : [];
+  } catch (error) {
+    console.error("API Error (getAlbumTracks):", error);
+    return [];
+  }
+};
+
+export const getPlaylistTracks = async (id: string): Promise<Song[]> => {
+  try {
+    const response = await fetch(`${BASE_URL}/playlist?id=${id}`);
+    const result = await response.json();
+    return result.status === 'success' ? result.data.tracks : [];
+  } catch (error) {
+    console.error("API Error (getPlaylistTracks):", error);
+    return [];
+  }
+};
+
+export const getLyrics = async (artist: string, track: string) => {
   try {
     const response = await fetch(`${LYRICS_BASE_URL}?artist=${encodeURIComponent(artist)}&track=${encodeURIComponent(track)}`);
     const data = await response.json();
-    if (data.status && data.lyrics) {
-      return data.lyrics;
-    }
-    return null;
+    return data.status && data.lyrics ? data.lyrics : null;
   } catch (error) {
     console.error("API Error (getLyrics):", error);
     return null;

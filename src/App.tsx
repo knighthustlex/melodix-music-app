@@ -1,11 +1,11 @@
 import React, { useState, useEffect, useRef } from 'react';
-import type { Song } from './services/api';
-import { getTopWorld, getTopByCountry, searchSongs, getLyrics } from './services/api';
+import type { Song, Album, Playlist, HomeData } from './services/api';
+import { getHome, getStream, searchSongs, getLyrics, getAlbumTracks, getPlaylistTracks } from './services/api';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
   Search, Play, Pause, SkipForward, SkipBack, Music, Home, 
-  TrendingUp, X, Loader2, Globe, ChevronDown, Repeat, Shuffle, 
-  Repeat1, Download
+  TrendingUp, X, Loader2, ChevronDown, Repeat, Shuffle, 
+  Repeat1, Download, Disc, LayoutGrid
 } from 'lucide-react';
 import './App.css';
 
@@ -18,8 +18,7 @@ interface ParsedLyric {
 }
 
 const App: React.FC = () => {
-  const [worldSongs, setWorldSongs] = useState<Song[]>([]);
-  const [countrySongs, setCountrySongs] = useState<Song[]>([]);
+  const [homeData, setHomeData] = useState<HomeData | null>(null);
   const [searchResults, setSearchResults] = useState<Song[]>([]);
   const [query, setQuery] = useState('');
   
@@ -59,21 +58,17 @@ const App: React.FC = () => {
 
   useEffect(() => {
     if (currentSong) {
-      extractDominantColor(currentSong.image['500x500']);
+      extractDominantColor(currentSong.image);
     }
   }, [currentSong]);
 
   const loadInitialData = async () => {
     try {
       setIsLoading(true);
-      const [world, usaCharts] = await Promise.all([
-        getTopWorld(12),
-        getTopByCountry('usa', 12)
-      ]);
-      setWorldSongs(world || []);
-      setCountrySongs(usaCharts || []);
+      const data = await getHome();
+      setHomeData(data);
     } catch (error) {
-      console.error("Failed to load charts", error);
+      console.error("Failed to load home data", error);
     } finally {
       setIsLoading(false);
     }
@@ -92,7 +87,7 @@ const App: React.FC = () => {
       ctx.drawImage(img, 0, 0, 1, 1);
       const [r, g, b] = ctx.getImageData(0, 0, 1, 1).data;
       const primary = `rgb(${r}, ${g}, ${b})`;
-      const secondary = `rgb(${g}, ${b}, ${r})`; // Complementary-ish
+      const secondary = `rgb(${g}, ${b}, ${r})`; 
       setThemeColors({ primary, secondary });
       document.documentElement.style.setProperty('--theme-primary', primary);
       document.documentElement.style.setProperty('--theme-secondary', secondary);
@@ -103,12 +98,9 @@ const App: React.FC = () => {
     if (!audioRef.current || analyserRef.current) return;
     try {
       const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
-      
-      // Resume context if it's suspended (browsers do this by default)
       if (audioContext.state === 'suspended') {
         await audioContext.resume();
       }
-
       const source = audioContext.createMediaElementSource(audioRef.current);
       const analyser = audioContext.createAnalyser();
       source.connect(analyser);
@@ -151,13 +143,14 @@ const App: React.FC = () => {
     if (!currentSong) return;
     setIsDownloading(true);
     try {
-      const url = currentSong.download['320kbps'] || currentSong.download['160kbps'];
-      const response = await fetch(url);
+      const streamData = await getStream(currentSong.id);
+      if (!streamData) return;
+      const response = await fetch(streamData.stream_url);
       const blob = await response.blob();
       const blobUrl = window.URL.createObjectURL(blob);
       const link = document.createElement('a');
       link.href = blobUrl;
-      link.download = `${currentSong.artist} - ${currentSong.title}.mp3`;
+      link.download = `${currentSong.artists} - ${currentSong.title}.${streamData.codec}`;
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
@@ -189,7 +182,7 @@ const App: React.FC = () => {
     setLyrics([]);
     setActiveLyricIndex(-1);
     try {
-      const data = await getLyrics(song.artist, song.title);
+      const data = await getLyrics(song.artists, song.title);
       if (data && data.synced) setLyrics(parseSyncedLyrics(data.synced));
     } catch (err) {
       console.error("Lyrics error", err);
@@ -212,7 +205,7 @@ const App: React.FC = () => {
     }
   };
 
-  const playSong = (song: Song, queue: Song[]) => {
+  const playSong = async (song: Song, queue: Song[]) => {
     const index = queue.findIndex(s => s.id === song.id);
     setCurrentQueue(queue);
     setCurrentIndex(index);
@@ -220,10 +213,35 @@ const App: React.FC = () => {
     setIsPlaying(true);
     fetchSongLyrics(song);
     
-    if (audioRef.current) {
-      audioRef.current.src = song.download['320kbps'] || song.download['160kbps'];
-      audioRef.current.load();
-      audioRef.current.play().then(initVisualizer).catch(console.error);
+    try {
+      const streamData = await getStream(song.id);
+      if (streamData && audioRef.current) {
+        audioRef.current.src = streamData.stream_url;
+        audioRef.current.load();
+        audioRef.current.play().then(initVisualizer).catch(console.error);
+      }
+    } catch (err) {
+      console.error("Playback failed", err);
+    }
+  };
+
+  const playAlbum = async (album: Album) => {
+    setIsLoading(true);
+    try {
+      const tracks = await getAlbumTracks(album.id);
+      if (tracks.length > 0) playSong(tracks[0], tracks);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const playPlaylist = async (playlist: Playlist) => {
+    setIsLoading(true);
+    try {
+      const tracks = await getPlaylistTracks(playlist.uuid);
+      if (tracks.length > 0) playSong(tracks[0], tracks);
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -300,13 +318,19 @@ const App: React.FC = () => {
             ) : searchResults.length > 0 ? (
               <section className="glass-card">
                 <div className="section-header"><h2>Search Results</h2><button onClick={() => setSearchResults([])} className="clear-btn">Clear</button></div>
-                <div className="songs-grid">{searchResults.map(song => (<div key={song.id} className="song-list-item" onClick={() => playSong(song, searchResults)}><img src={song.image['150x150']} alt={song.title} className="song-list-image" /><div className="player-info"><div className="player-title">{song.title}</div><div className="player-artist">{song.artist}</div></div><Play size={18} /></div>))}</div>
+                <div className="songs-grid">{searchResults.map(song => (<div key={song.id} className="song-list-item" onClick={() => playSong(song, searchResults)}><img src={song.image} alt={song.title} className="song-list-image" /><div className="player-info"><div className="player-title">{song.title}</div><div className="player-artist">{song.artists}</div></div><Play size={18} /></div>))}</div>
               </section>
             ) : (
               <motion.div variants={containerVariants} initial="hidden" animate="show" style={{ display: 'flex', flexDirection: 'column', gap: '40px' }}>
                 <section className="hero"><motion.h1 variants={itemVariants}>Discover Your <br/><span style={{ color: 'var(--theme-secondary)' }}>Next Favorite</span></motion.h1><motion.p variants={itemVariants}>Thousands of tracks, one destination.</motion.p></section>
-                <section><div className="section-header"><TrendingUp size={20} color="var(--accent-color)" /><h2>Trending Globally</h2></div><div className="horizontal-scroll">{worldSongs.map(song => (<motion.div whileHover={{ scale: 1.05 }} key={song.id} className="trending-card" onClick={() => playSong(song, worldSongs)}><img src={song.image['500x500']} alt={song.title} className="trending-image" /><div className="player-title">{song.title}</div><div className="player-artist">{song.artist}</div></motion.div>))}</div></section>
-                <section className="glass-card"><div className="section-header"><Globe size={20} color="var(--theme-primary)" /><h2>Top in USA</h2></div><div className="songs-grid">{countrySongs.map(song => (<div key={song.id} className="song-list-item" onClick={() => playSong(song, countrySongs)}><img src={song.image['150x150']} alt={song.title} className="song-list-image" /><div className="player-info"><div className="player-title">{song.title}</div><div className="player-artist">{song.artist}</div></div><Play size={18} /></div>))}</div></section>
+                
+                {homeData && (
+                  <>
+                    <section><div className="section-header"><TrendingUp size={20} color="var(--accent-color)" /><h2>New Tracks</h2></div><div className="horizontal-scroll">{homeData.new_tracks.map(song => (<motion.div whileHover={{ scale: 1.05 }} key={song.id} className="trending-card" onClick={() => playSong(song, homeData.new_tracks)}><img src={song.image} alt={song.title} className="trending-image" /><div className="player-title">{song.title}</div><div className="player-artist">{song.artists}</div></motion.div>))}</div></section>
+                    <section><div className="section-header"><Disc size={20} color="var(--theme-primary)" /><h2>New Albums</h2></div><div className="horizontal-scroll">{homeData.new_albums.map(album => (<motion.div whileHover={{ scale: 1.05 }} key={album.id} className="trending-card" onClick={() => playAlbum(album)}><img src={album.image} alt={album.title} className="trending-image" style={{ borderRadius: '12px' }} /><div className="player-title">{album.title}</div><div className="player-artist">{album.artists}</div></motion.div>))}</div></section>
+                    <section className="glass-card"><div className="section-header"><LayoutGrid size={20} color="var(--theme-secondary)" /><h2>Featured Playlists</h2></div><div className="songs-grid">{homeData.featured_playlists.map(playlist => (<div key={playlist.uuid} className="song-list-item" onClick={() => playPlaylist(playlist)}><img src={playlist.image} alt={playlist.title} className="song-list-image" /><div className="player-info"><div className="player-title">{playlist.title}</div><div className="player-artist">{playlist.tracks} Tracks • {playlist.type}</div></div><Play size={18} /></div>))}</div></section>
+                  </>
+                )}
               </motion.div>
             )}
           </AnimatePresence>
@@ -327,14 +351,14 @@ const App: React.FC = () => {
           <motion.div layout initial={isExpanded ? { y: 0, opacity: 1 } : { y: 100, opacity: 0 }} animate={{ y: 0, opacity: 1 }} exit={{ y: 100, opacity: 0 }} className={isExpanded ? "player-full-screen" : "player-container"}>
             {isExpanded ? (
               <>
-                <div className="player-expanded-bg" style={{ backgroundImage: `url(${currentSong.image.original})`, backgroundSize: 'cover' }}></div>
+                <div className="player-expanded-bg" style={{ backgroundImage: `url(${currentSong.image})`, backgroundSize: 'cover' }}></div>
                 <div className="player-header"><button onClick={() => setIsExpanded(false)} className="clear-btn"><ChevronDown size={32} /></button><div><div style={{ fontSize: '0.8rem', opacity: 0.6 }}>Now Playing</div><div style={{ fontWeight: 600 }}>Queue ({currentIndex + 1}/{currentQueue.length})</div></div><button className="clear-btn" onClick={handleDownload}>{isDownloading ? <Loader2 className="spin" /> : <Download size={24} />}</button></div>
                 <div className="player-tabs"><button className={`tab-btn ${activeTab === 'player' ? 'active' : ''}`} onClick={() => setActiveTab('player')}>Player</button><button className={`tab-btn ${activeTab === 'lyrics' ? 'active' : ''}`} onClick={() => setActiveTab('lyrics')}>Lyrics</button></div>
                 <AnimatePresence mode="wait">
                   {activeTab === 'player' ? (
                     <motion.div key="player-tab" initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: 20 }} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-                      <div className="player-artwork-container"><motion.div layoutId="artwork-container" className="player-artwork-wrapper"><motion.img layoutId="artwork-img" src={currentSong.image.original} alt={currentSong.title} className="player-artwork-expanded" /></motion.div></div>
-                      <div className="player-details-expanded"><h1 className="player-title-expanded">{currentSong.title}</h1><p className="player-artist-expanded">{currentSong.artist}</p></div>
+                      <div className="player-artwork-container"><motion.div layoutId="artwork-container" className="player-artwork-wrapper"><motion.img layoutId="artwork-img" src={currentSong.image} alt={currentSong.title} className="player-artwork-expanded" /></motion.div></div>
+                      <div className="player-details-expanded"><h1 className="player-title-expanded">{currentSong.title}</h1><p className="player-artist-expanded">{currentSong.artists}</p></div>
                       <canvas ref={canvasRef} className="visualizer-canvas" width={300} height={80}></canvas>
                     </motion.div>
                   ) : (
@@ -350,7 +374,7 @@ const App: React.FC = () => {
               </>
             ) : (
               <div className="player-main" onClick={() => setIsExpanded(true)}>
-                <div className="player-mini-clickable"><motion.div layoutId="artwork-container" className="song-list-image"><motion.img layoutId="artwork-img" src={currentSong.image['150x150']} alt={currentSong.title} className="player-artwork-expanded" /></motion.div><div className="player-info"><div className="player-title">{currentSong.title}</div><div className="player-artist">{currentSong.artist}</div></div></div>
+                <div className="player-mini-clickable"><motion.div layoutId="artwork-container" className="song-list-image"><motion.img layoutId="artwork-img" src={currentSong.image} alt={currentSong.title} className="player-artwork-expanded" /></motion.div><div className="player-info"><div className="player-title">{currentSong.title}</div><div className="player-artist">{currentSong.artists}</div></div></div>
                 <div className="player-controls"><button className="play-btn" onClick={togglePlay}>{isPlaying ? <Pause size={24} fill="black" /> : <Play size={24} fill="black" />}</button></div>
               </div>
             )}
