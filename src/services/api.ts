@@ -53,7 +53,7 @@ export interface StreamData {
   codec: string;
 }
 
-const BASE_URL = 'https://flip-musix.vercel.app';
+const BASE_URL = window.location.hostname === 'localhost' ? 'https://flip-musix.vercel.app' : '/api/v1';
 const LYRICS_BASE_URL = window.location.hostname === 'localhost' ? 'https://flip-lyrics.vercel.app/api/lyrics' : '/api/lyrics';
 
 export const getHome = async (): Promise<HomeData | null> => {
