@@ -13,12 +13,8 @@ export interface Song {
   popularity?: number;
   isrc?: string;
   track_number?: number;
-  // Compatibility with old interface
   artist?: string; 
-  download?: {
-    "320kbps": string;
-    "160kbps": string;
-  };
+  artist_id?: string | number;
 }
 
 export interface Album {
@@ -30,6 +26,7 @@ export interface Album {
   duration: string;
   release: string;
   quality: string;
+  artist_id?: string | number;
 }
 
 export interface Playlist {
@@ -40,10 +37,19 @@ export interface Playlist {
   type: string;
 }
 
-export interface HomeData {
-  new_tracks: Song[];
-  new_albums: Album[];
-  featured_playlists: Playlist[];
+export interface Artist {
+  id: string | number;
+  name: string;
+  image: string;
+  fans?: number;
+  albums_count?: number;
+  top_tracks: Song[];
+  albums: Album[];
+}
+
+export interface Section {
+  title: string;
+  contents: (Song | Album | Playlist)[];
 }
 
 export interface StreamData {
@@ -56,14 +62,14 @@ export interface StreamData {
 const BASE_URL = window.location.hostname === 'localhost' ? 'https://flip-musix.vercel.app' : '/api/v1';
 const LYRICS_BASE_URL = window.location.hostname === 'localhost' ? 'https://flip-lyrics.vercel.app/api/lyrics' : '/api/lyrics';
 
-export const getHome = async (): Promise<HomeData | null> => {
+export const getSections = async (): Promise<Section[]> => {
   try {
-    const response = await fetch(`${BASE_URL}/home`);
+    const response = await fetch(`${BASE_URL}/sections`);
     const result = await response.json();
-    return result.status === 'success' ? result.data : null;
+    return result.status === 'success' ? result.data : [];
   } catch (error) {
-    console.error("API Error (getHome):", error);
-    return null;
+    console.error("API Error (getSections):", error);
+    return [];
   }
 };
 
@@ -78,13 +84,46 @@ export const getStream = async (id: string | number): Promise<StreamData | null>
   }
 };
 
-export const searchSongs = async (query: string, limit: number = 20): Promise<Song[]> => {
+export const searchTracks = async (query: string, limit: number = 20): Promise<Song[]> => {
   try {
     const response = await fetch(`${BASE_URL}/search/tracks?q=${encodeURIComponent(query)}&limit=${limit}`);
     const result = await response.json();
     return result.status === 'success' ? result.data.tracks : [];
   } catch (error) {
-    console.error("API Error (searchSongs):", error);
+    console.error("API Error (searchTracks):", error);
+    return [];
+  }
+};
+
+export const searchAlbums = async (query: string, limit: number = 20): Promise<Album[]> => {
+  try {
+    const response = await fetch(`${BASE_URL}/search/albums?q=${encodeURIComponent(query)}&limit=${limit}`);
+    const result = await response.json();
+    return result.status === 'success' ? result.data.albums : [];
+  } catch (error) {
+    console.error("API Error (searchAlbums):", error);
+    return [];
+  }
+};
+
+export const searchArtists = async (query: string, limit: number = 20): Promise<Artist[]> => {
+  try {
+    const response = await fetch(`${BASE_URL}/search/artists?q=${encodeURIComponent(query)}&limit=${limit}`);
+    const result = await response.json();
+    return result.status === 'success' ? result.data.artists : [];
+  } catch (error) {
+    console.error("API Error (searchArtists):", error);
+    return [];
+  }
+};
+
+export const searchPlaylists = async (query: string, limit: number = 20): Promise<Playlist[]> => {
+  try {
+    const response = await fetch(`${BASE_URL}/search/playlists?q=${encodeURIComponent(query)}&limit=${limit}`);
+    const result = await response.json();
+    return result.status === 'success' ? result.data.playlists : [];
+  } catch (error) {
+    console.error("API Error (searchPlaylists):", error);
     return [];
   }
 };
@@ -107,6 +146,28 @@ export const getPlaylistTracks = async (id: string): Promise<Song[]> => {
     return result.status === 'success' ? result.data.tracks : [];
   } catch (error) {
     console.error("API Error (getPlaylistTracks):", error);
+    return [];
+  }
+};
+
+export const getArtistData = async (id: string | number): Promise<Artist | null> => {
+  try {
+    const response = await fetch(`${BASE_URL}/artist?id=${id}`);
+    const result = await response.json();
+    return result.status === 'success' ? result.data : null;
+  } catch (error) {
+    console.error("API Error (getArtistData):", error);
+    return null;
+  }
+};
+
+export const getRecommendations = async (id: string | number): Promise<Song[]> => {
+  try {
+    const response = await fetch(`${BASE_URL}/recommend?id=${id}`);
+    const result = await response.json();
+    return result.status === 'success' ? result.data : [];
+  } catch (error) {
+    console.error("API Error (getRecommendations):", error);
     return [];
   }
 };
