@@ -66,7 +66,13 @@ export const getSections = async (): Promise<Section[]> => {
   try {
     const response = await fetch(`${BASE_URL}/sections`);
     const result = await response.json();
-    return result.status === 'success' ? result.data : [];
+    if (result.status === 'success' && result.data.sections) {
+      return result.data.sections.map((section: any) => ({
+        title: section.title,
+        contents: section.items || []
+      }));
+    }
+    return [];
   } catch (error) {
     console.error("API Error (getSections):", error);
     return [];
@@ -165,7 +171,7 @@ export const getRecommendations = async (id: string | number): Promise<Song[]> =
   try {
     const response = await fetch(`${BASE_URL}/recommend?id=${id}`);
     const result = await response.json();
-    return result.status === 'success' ? result.data : [];
+    return result.status === 'success' ? result.data.recommendations || [] : [];
   } catch (error) {
     console.error("API Error (getRecommendations):", error);
     return [];
@@ -176,7 +182,7 @@ export const getLyrics = async (artist: string, track: string) => {
   try {
     const response = await fetch(`${LYRICS_BASE_URL}?artist=${encodeURIComponent(artist)}&track=${encodeURIComponent(track)}`);
     const data = await response.json();
-    return data.status && data.lyrics ? data.lyrics : null;
+    return data && data.lyrics ? data.lyrics : null;
   } catch (error) {
     console.error("API Error (getLyrics):", error);
     return null;
