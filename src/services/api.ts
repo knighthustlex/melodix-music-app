@@ -158,13 +158,25 @@ export const getPlaylistTracks = async (id: string): Promise<Song[]> => {
 
 export const getArtistData = async (id: string | number): Promise<Artist | null> => {
   try {
-    const response = await fetch(`${BASE_URL}/artist?id=${id}`);
+    // If id is not numeric, search for the artist first to get their ID
+    let numericId = id;
+    if (isNaN(Number(id))) {
+      const searchResults = await searchArtists(id.toString(), 1);
+      if (searchResults && searchResults.length > 0) {
+        numericId = searchResults[0].id;
+      } else {
+        return null;
+      }
+    }
+
+    const response = await fetch(`${BASE_URL}/artist?id=${numericId}`);
     const result = await response.json();
+    
     if ((result.status === 'success' || result.status === 'error') && result.data) {
       // API might return { artist: {}, tracks: [], albums: [] } or just the artist object
       const artistInfo = result.data.artist || result.data;
       return {
-        id: artistInfo.id || result.data.artist_id || id,
+        id: artistInfo.id || result.data.artist_id || numericId,
         name: artistInfo.name || artistInfo.title || 'Unknown Artist',
         image: artistInfo.image || artistInfo.artist_image || '',
         fans: artistInfo.fans || 0,
@@ -173,10 +185,11 @@ export const getArtistData = async (id: string | number): Promise<Artist | null>
         albums: result.data.albums || artistInfo.albums || []
       };
     }
-    // If the API returns error but still has some data, try to use it
-    if (result.status === 'error' && result.message && result.message.includes('id')) {
-       const suggestedId = result.message.split('id=')[1];
-       if (suggestedId && suggestedId !== id.toString()) {
+    
+    // Fallback suggested by API error messages
+    if (result.status === 'error' && result.message && result.message.includes('id=')) {
+       const suggestedId = result.message.split('id=')[1].split('&')[0];
+       if (suggestedId && suggestedId !== numericId.toString()) {
          return getArtistData(suggestedId);
        }
     }
