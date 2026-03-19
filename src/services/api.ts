@@ -160,7 +160,20 @@ export const getArtistData = async (id: string | number): Promise<Artist | null>
   try {
     const response = await fetch(`${BASE_URL}/artist?id=${id}`);
     const result = await response.json();
-    return result.status === 'success' ? result.data : null;
+    if (result.status === 'success' && result.data) {
+      // API might return { artist: {}, tracks: [], albums: [] } or just the artist object
+      const artistInfo = result.data.artist || result.data;
+      return {
+        id: artistInfo.id || result.data.artist_id || id,
+        name: artistInfo.name || artistInfo.title || 'Unknown Artist',
+        image: artistInfo.image || artistInfo.artist_image || '',
+        fans: artistInfo.fans || 0,
+        albums_count: artistInfo.albums_count || (result.data.albums ? result.data.albums.length : 0),
+        top_tracks: result.data.tracks || result.data.top_tracks || artistInfo.top_tracks || [],
+        albums: result.data.albums || artistInfo.albums || []
+      };
+    }
+    return null;
   } catch (error) {
     console.error("API Error (getArtistData):", error);
     return null;

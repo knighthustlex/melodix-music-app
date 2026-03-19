@@ -549,6 +549,32 @@ body {
   display: flex;
   justify-content: space-between;
   align-items: center;
+  margin-top: 10px;
+}
+
+.control-icon-btn {
+  background: none;
+  border: none;
+  color: white;
+  cursor: pointer;
+  opacity: 0.6;
+  transition: all 0.2s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 8px;
+  border-radius: 50%;
+}
+
+.control-icon-btn:hover {
+  opacity: 1;
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.control-icon-btn.active {
+  opacity: 1;
+  color: var(--accent-color);
+  background: rgba(0, 229, 255, 0.1);
 }
 
 .lyrics-container {

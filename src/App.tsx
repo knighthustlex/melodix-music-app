@@ -552,18 +552,18 @@ const App: React.FC = () => {
 
   const renderTrackItem = (song: Song, queue: Song[]) => (
     <div key={song.id} className="song-list-item" onClick={() => playSong(song, queue)} style={{ position: 'relative' }}>
-      <img src={song.image} alt={song.title} className="song-list-image" />
+      <img src={song.image || activeViewData?.image || ''} alt={song.title} className="song-list-image" />
       <div className="player-info">
         <div className="player-title" style={{ color: currentSong?.id === song.id ? 'var(--theme-primary)' : 'white' }}>
           {song.title}
           <QualityBadge quality={song.quality} />
         </div>
         <div className="player-artist" onClick={(e) => {
-          if (song.artist_id) {
+          if (song.artist_id || song.id) { // Use track ID as fallback if artist_id is missing (some APIs do this)
             e.stopPropagation();
-            openArtist(song.artist_id);
+            openArtist(song.artist_id || song.id); 
           }
-        }} style={{ cursor: song.artist_id ? 'pointer' : 'default' }}>
+        }} style={{ cursor: 'pointer' }}>
           {song.artists}
         </div>
       </div>
@@ -684,62 +684,97 @@ const App: React.FC = () => {
             )}
 
             {/* ARTIST DETAIL VIEW */}
-            {viewMode === 'artist' && activeViewData && (
-              <motion.div key="artist-view" variants={containerVariants} initial="hidden" animate="show" className="detail-view">
-                <div className="detail-header">
-                  <img src={activeViewData.image} className="detail-image" alt={activeViewData.name} style={{ borderRadius: '50%' }} />
-                  <div className="detail-info">
-                    <h1>{activeViewData.name}</h1>
-                    <p>{activeViewData.fans?.toLocaleString()} fans • {activeViewData.albums_count} albums</p>
-                    <div style={{ display: 'flex', gap: '10px', marginTop: '15px' }}>
-                      <button className="play-all-btn" onClick={() => playSong(activeViewData.top_tracks[0], activeViewData.top_tracks)}>
-                        <Play fill="white" size={16} /> Play Top Tracks
-                      </button>
+            {viewMode === 'artist' && (
+              isLoading ? (
+                <div className="detail-view">
+                   <div className="detail-header">
+                     <div className="detail-image skeleton"></div>
+                     <div className="detail-info" style={{width:'100%'}}>
+                       <div className="skeleton skeleton-text" style={{height:'2rem'}}></div>
+                       <div className="skeleton skeleton-text short"></div>
+                     </div>
+                   </div>
+                   <section className="glass-card"><div className="songs-grid">{[...Array(5)].map((_, i) => <SkeletonList key={i} />)}</div></section>
+                </div>
+              ) : activeViewData ? (
+                <motion.div key="artist-view" variants={containerVariants} initial="hidden" animate="show" className="detail-view">
+                  <div className="detail-header">
+                    <img src={activeViewData.image} className="detail-image" alt={activeViewData.name} style={{ borderRadius: '50%' }} />
+                    <div className="detail-info">
+                      <h1>{activeViewData.name}</h1>
+                      <p>{activeViewData.fans?.toLocaleString()} fans • {activeViewData.albums_count} albums</p>
+                      <div style={{ display: 'flex', gap: '10px', marginTop: '15px' }}>
+                        {activeViewData.top_tracks && activeViewData.top_tracks.length > 0 && (
+                          <button className="play-all-btn" onClick={() => playSong(activeViewData.top_tracks[0], activeViewData.top_tracks)}>
+                            <Play fill="white" size={16} /> Play Top Tracks
+                          </button>
+                        )}
+                      </div>
                     </div>
                   </div>
+
+                  {activeViewData.top_tracks && activeViewData.top_tracks.length > 0 && (
+                    <section className="glass-card" style={{ marginTop: '20px' }}>
+                      <div className="section-header"><h2>Top Tracks</h2></div>
+                      <div className="songs-grid">
+                        {activeViewData.top_tracks.map((song: Song) => renderTrackItem(song, activeViewData.top_tracks))}
+                      </div>
+                    </section>
+                  )}
+
+                  {activeViewData.albums && activeViewData.albums.length > 0 && (
+                    <section style={{ marginTop: '40px' }}>
+                      <div className="section-header"><Disc size={20} color="var(--theme-primary)" /><h2>Albums</h2></div>
+                      <div className="horizontal-scroll">
+                        {activeViewData.albums.map((album: Album) => (
+                          <motion.div whileHover={{ scale: 1.05 }} key={album.id} className="trending-card" onClick={() => openAlbum(album)}>
+                            <img src={album.image} alt={album.title} className="trending-image" style={{ borderRadius: '12px' }} />
+                            <div className="player-title">{album.title} <QualityBadge quality={album.quality} /></div>
+                            <div className="player-artist">{album.release}</div>
+                          </motion.div>
+                        ))}
+                      </div>
+                    </section>
+                  )}
+                </motion.div>
+              ) : (
+                <div className="detail-view" style={{textAlign:'center', paddingTop:'50px'}}>
+                  <h2>Artist not found</h2>
+                  <p style={{opacity:0.5}}>We couldn't load the data for this artist.</p>
+                  <button className="play-all-btn" style={{margin:'20px auto'}} onClick={() => setViewMode('home')}>Go Home</button>
                 </div>
-
-                <section className="glass-card" style={{ marginTop: '20px' }}>
-                  <div className="section-header"><h2>Top Tracks</h2></div>
-                  <div className="songs-grid">
-                    {activeViewData.top_tracks.map((song: Song) => renderTrackItem(song, activeViewData.top_tracks))}
-                  </div>
-                </section>
-
-                <section style={{ marginTop: '40px' }}>
-                  <div className="section-header"><Disc size={20} color="var(--theme-primary)" /><h2>Albums</h2></div>
-                  <div className="horizontal-scroll">
-                    {activeViewData.albums.map((album: Album) => (
-                      <motion.div whileHover={{ scale: 1.05 }} key={album.id} className="trending-card" onClick={() => openAlbum(album)}>
-                        <img src={album.image} alt={album.title} className="trending-image" style={{ borderRadius: '12px' }} />
-                        <div className="player-title">{album.title} <QualityBadge quality={album.quality} /></div>
-                        <div className="player-artist">{album.release}</div>
-                      </motion.div>
-                    ))}
-                  </div>
-                </section>
-              </motion.div>
+              )
             )}
 
             {/* ALBUM / PLAYLIST DETAIL VIEW */}
-            {(viewMode === 'album' || viewMode === 'playlist') && activeViewData && (
-              <motion.div key="detail-view" variants={containerVariants} initial="hidden" animate="show" className="detail-view">
-                <div className="detail-header">
-                  <img src={activeViewData.image} className="detail-image" alt="Cover" />
-                  <div className="detail-info">
-                    <h1>{activeViewData.title}</h1>
-                    <p>{viewMode === 'album' ? activeViewData.artists : `${activeViewData.tracks} Tracks • ${activeViewData.type}`}</p>
-                    <button className="play-all-btn" onClick={playAllViewTracks}><Play fill="white" size={16} /> Play All</button>
-                  </div>
+            {(viewMode === 'album' || viewMode === 'playlist') && (
+              isLoading ? (
+                <div className="detail-view">
+                   <div className="detail-header">
+                     <div className="detail-image skeleton"></div>
+                     <div className="detail-info" style={{width:'100%'}}>
+                       <div className="skeleton skeleton-text" style={{height:'2rem'}}></div>
+                       <div className="skeleton skeleton-text short"></div>
+                     </div>
+                   </div>
+                   <section className="glass-card"><div className="songs-grid">{[...Array(5)].map((_, i) => <SkeletonList key={i} />)}</div></section>
                 </div>
-                <section className="glass-card" style={{paddingTop: '10px'}}>
-                  <div className="songs-grid">
-                    {isLoading ? (
-                       [...Array(5)].map((_, i) => <SkeletonList key={i} />)
-                    ) : (
-                      viewTracks.map((song, i) => (
+              ) : activeViewData ? (
+                <motion.div key="detail-view" variants={containerVariants} initial="hidden" animate="show" className="detail-view">
+                  <div className="detail-header">
+                    <img src={activeViewData.image} className="detail-image" alt="Cover" />
+                    <div className="detail-info">
+                      <h1>{activeViewData.title}</h1>
+                      <p>{viewMode === 'album' ? activeViewData.artists : `${activeViewData.tracks} Tracks • ${activeViewData.type}`}</p>
+                      <button className="play-all-btn" onClick={playAllViewTracks}><Play fill="white" size={16} /> Play All</button>
+                    </div>
+                  </div>
+                  <section className="glass-card" style={{paddingTop: '10px'}}>
+                    <div className="songs-grid">
+                      {viewTracks.map((song, i) => (
                         <div key={song.id} className="song-list-item" onClick={() => playSong(song, viewTracks)}>
                           <div style={{opacity: 0.5, width: '20px', textAlign: 'center'}}>{i + 1}</div>
+                          <img src={song.image || (activeViewData?.image) || ''} alt={song.title} className="song-list-image" />
                           <div className="player-info">
                             <div className="player-title" style={{ color: currentSong?.id === song.id ? 'var(--theme-primary)' : 'white' }}>{song.title}</div>
                             <div className="player-artist">{song.artists}</div>
@@ -757,11 +792,16 @@ const App: React.FC = () => {
                             )}
                           </AnimatePresence>
                         </div>
-                      ))
-                    )}
-                  </div>
-                </section>
-              </motion.div>
+                      ))}
+                    </div>
+                  </section>
+                </motion.div>
+              ) : (
+                <div className="detail-view" style={{textAlign:'center', paddingTop:'50px'}}>
+                  <h2>Content not found</h2>
+                  <button className="play-all-btn" style={{margin:'20px auto'}} onClick={() => setViewMode('home')}>Go Home</button>
+                </div>
+              )
             )}
 
             {/* HOME VIEW */}
@@ -965,15 +1005,21 @@ const App: React.FC = () => {
                   </div>
 
                   <div className="playback-buttons">
-                    <Shuffle size={24} onClick={() => setIsShuffle(!isShuffle)} color={isShuffle ? 'var(--secondary-color)' : 'white'} style={{ opacity: isShuffle ? 1 : 0.5, cursor:'pointer' }} />
-                    <SkipBack size={32} fill="white" onClick={playPrevious} style={{cursor:'pointer'}}/>
+                    <button className={`control-icon-btn ${isShuffle ? 'active' : ''}`} onClick={() => setIsShuffle(!isShuffle)}>
+                      <Shuffle size={24} />
+                    </button>
+                    <button className="control-icon-btn" onClick={playPrevious}>
+                      <SkipBack size={32} fill="white" />
+                    </button>
                     <button className="play-btn btn-large" onClick={() => togglePlay()}>
                       {isPlaying ? <Pause size={32} fill="black" /> : <Play size={32} fill="black" />}
                     </button>
-                    <SkipForward size={32} fill="white" onClick={playNext} style={{cursor:'pointer'}}/>
-                    <div onClick={() => setRepeatMode(repeatMode === 'none' ? 'all' : repeatMode === 'all' ? 'one' : 'none')} style={{cursor:'pointer'}}>
-                      {repeatMode === 'one' ? <Repeat1 size={24} color="var(--secondary-color)" /> : <Repeat size={24} color={repeatMode === 'all' ? 'var(--secondary-color)' : 'white'} style={{ opacity: repeatMode === 'all' ? 1 : 0.5 }} />}
-                    </div>
+                    <button className="control-icon-btn" onClick={playNext}>
+                      <SkipForward size={32} fill="white" />
+                    </button>
+                    <button className={`control-icon-btn ${repeatMode !== 'none' ? 'active' : ''}`} onClick={() => setRepeatMode(repeatMode === 'none' ? 'all' : repeatMode === 'all' ? 'one' : 'none')}>
+                      {repeatMode === 'one' ? <Repeat1 size={24} /> : <Repeat size={24} />}
+                    </button>
                   </div>
                 </div>
               </>
