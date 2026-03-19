@@ -160,7 +160,7 @@ export const getArtistData = async (id: string | number): Promise<Artist | null>
   try {
     const response = await fetch(`${BASE_URL}/artist?id=${id}`);
     const result = await response.json();
-    if (result.status === 'success' && result.data) {
+    if ((result.status === 'success' || result.status === 'error') && result.data) {
       // API might return { artist: {}, tracks: [], albums: [] } or just the artist object
       const artistInfo = result.data.artist || result.data;
       return {
@@ -172,6 +172,13 @@ export const getArtistData = async (id: string | number): Promise<Artist | null>
         top_tracks: result.data.tracks || result.data.top_tracks || artistInfo.top_tracks || [],
         albums: result.data.albums || artistInfo.albums || []
       };
+    }
+    // If the API returns error but still has some data, try to use it
+    if (result.status === 'error' && result.message && result.message.includes('id')) {
+       const suggestedId = result.message.split('id=')[1];
+       if (suggestedId && suggestedId !== id.toString()) {
+         return getArtistData(suggestedId);
+       }
     }
     return null;
   } catch (error) {

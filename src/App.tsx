@@ -560,11 +560,9 @@ const App: React.FC = () => {
           <QualityBadge quality={song.quality} />
         </div>
         <div className="player-artist" onClick={(e) => {
-          if (song.artist_id) {
-            e.stopPropagation();
-            openArtist(song.artist_id);
-          }
-        }} style={{ cursor: song.artist_id ? 'pointer' : 'default' }}>
+          e.stopPropagation();
+          openArtist(song.artist_id || song.artists.split(',')[0].trim());
+        }} style={{ cursor: 'pointer' }}>
           {song.artists}
         </div>
 
@@ -963,7 +961,9 @@ const App: React.FC = () => {
                       </div>
                       <div className="player-details-expanded">
                         <h1 className="player-title-expanded">{currentSong.title}</h1>
-                        <p className="player-artist-expanded">{currentSong.artists}</p>
+                        <p className="player-artist-expanded" onClick={() => { setIsExpanded(false); openArtist(currentSong.artist_id || currentSong.artists.split(',')[0].trim()); }} style={{ cursor: 'pointer' }}>
+                          {currentSong.artists}
+                        </p>
                       </div>
                       <canvas ref={canvasCallbackRef} className="visualizer-canvas" width={300} height={80}></canvas>
                     </motion.div>
