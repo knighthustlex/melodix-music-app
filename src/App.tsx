@@ -407,16 +407,17 @@ const App: React.FC = () => {
     setIsPlaying(true);
     fetchSongLyrics(song);
     
+    // Initialize or resume audio context immediately to capture user gesture
+    if (!audioContextRef.current) {
+      initAudioContext();
+    } else if (audioContextRef.current.state === 'suspended') {
+      audioContextRef.current.resume();
+    }
+
     try {
       const streamData = await getStream(song.id);
       if (streamData && audioRef.current) {
-        if (!audioContextRef.current) {
-          await initAudioContext();
-        } else if (audioContextRef.current.state === 'suspended') {
-          await audioContextRef.current.resume();
-        }
         audioRef.current.src = streamData.stream_url;
-        audioRef.current.load();
         audioRef.current.play().catch(console.error);
       }
     } catch (err) {
@@ -559,13 +560,14 @@ const App: React.FC = () => {
           <QualityBadge quality={song.quality} />
         </div>
         <div className="player-artist" onClick={(e) => {
-          if (song.artist_id || song.id) { // Use track ID as fallback if artist_id is missing (some APIs do this)
+          if (song.artist_id) {
             e.stopPropagation();
-            openArtist(song.artist_id || song.id); 
+            openArtist(song.artist_id);
           }
-        }} style={{ cursor: 'pointer' }}>
+        }} style={{ cursor: song.artist_id ? 'pointer' : 'default' }}>
           {song.artists}
         </div>
+
       </div>
       <div className="track-meta" style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
         {song.popularity !== undefined && <span style={{ opacity: 0.4, fontSize: '0.7rem' }}>{song.popularity}%</span>}
